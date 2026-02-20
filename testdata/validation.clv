@@ -1,0 +1,62 @@
+package validation;
+
+// Demonstrates CEL validation rules on binary format fields.
+
+// A file header with magic number and version constraints.
+struct Header {
+    magic   u32 [
+        (builtin).cel = {
+            id: "magic.check"
+            message: "invalid magic number"
+            expression: "this == 0x434C4156"
+        }
+    ];
+    version u16 [
+        (builtin).cel = {
+            id: "version.min"
+            message: "version must be at least 1"
+            expression: "this >= 1"
+        },
+        (builtin).cel = {
+            id: "version.max"
+            message: "version must be at most 100"
+            expression: "this <= 100"
+        }
+    ];
+    flags u8 [
+        (builtin).cel = {
+            id: "flags.range"
+            message: "flags must be between 0 and 7"
+            expression: "this >= 0 && this <= 7"
+        }
+    ];
+
+    option (builtin) = {
+        endian = big;
+    };
+}
+
+// A record with validated fields and conditional parsing.
+struct Record {
+    name     string[64, terminator = 0x00];
+    priority u8 [
+        (builtin).cel = {
+            id: "priority.valid"
+            message: "priority must be low (1), medium (2), or high (3)"
+            expression: "this >= 1 && this <= 3"
+        }
+    ];
+    has_data u8;
+    data     u32 [if = "has_data != 0"];
+}
+
+// A container that ties the header and records together.
+struct Container {
+    header       Header;
+    record_count u32;
+    records      Record [count = header.record_count];
+
+    option (builtin) = {
+        endian = big;
+    };
+}

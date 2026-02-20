@@ -1,0 +1,7 @@
+package circular;
+
+import "circular_import.clv";
+
+struct Foo {
+    x u32;
+}

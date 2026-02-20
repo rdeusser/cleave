@@ -1,0 +1,6 @@
+package broken;
+
+struct Bad {
+    x  u32;
+    x  u16;
+}

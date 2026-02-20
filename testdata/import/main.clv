@@ -1,0 +1,8 @@
+package sox;
+
+import "common.clv";
+
+struct SoxFile {
+    header  SoxHeader;
+    data    bytes     [rest = true];
+}

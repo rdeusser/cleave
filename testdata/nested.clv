@@ -1,0 +1,28 @@
+package nested;
+
+struct Point {
+    x  f32;
+    y  f32;
+}
+
+struct Color {
+    r  u8;
+    g  u8;
+    b  u8;
+    a  u8;
+}
+
+struct Vertex {
+    position  Point;
+    color     Color;
+    id        u32;
+}
+
+struct Mesh {
+    vertex_count  u32;
+    vertices      Vertex [rest = true];
+
+    option (builtin) = {
+        endian = little;
+    };
+}

@@ -1,0 +1,7 @@
+package missing;
+
+import "nonexistent.clv";
+
+struct Foo {
+    x u32;
+}

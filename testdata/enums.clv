@@ -1,0 +1,20 @@
+package enums;
+
+enum Status : u8 {
+    Active = 1;
+    Inactive = 2;
+    Deleted = 3;
+}
+
+enum Priority : u16 {
+    Low = 0x0001;
+    Medium = 0x0002;
+    High = 0x0003;
+    Critical = 0x0004;
+}
+
+struct Record {
+    id        u32;
+    status    Status;
+    priority  Priority;
+}

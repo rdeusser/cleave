@@ -1,0 +1,6 @@
+package common;
+
+struct SoxHeader {
+    magic   u32;
+    version u16;
+}

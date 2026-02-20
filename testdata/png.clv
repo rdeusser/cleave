@@ -1,0 +1,51 @@
+package png;
+
+enum ColorType : u8 {
+    Grayscale = 0;
+    RGB = 2;
+    Palette = 3;
+    GrayscaleAlpha = 4;
+    RGBA = 6;
+}
+
+struct Header {
+    signature bytes[8];
+
+    option (builtin) = {
+        endian = big;
+    };
+}
+
+struct IHDRData {
+    width             u32;
+    height            u32;
+    bit_depth         u8;
+    color_type        ColorType;
+    compression       u8;
+    filter            u8;
+    interlace         u8;
+
+    option (builtin) = {
+        endian = big;
+    };
+}
+
+struct Chunk {
+    length  u32;
+    type    bytes[4];
+    data    bytes[length];
+    crc     u32;
+
+    option (builtin) = {
+        endian = big;
+    };
+}
+
+struct PngFile {
+    header  Header;
+    chunks  Chunk [rest = true];
+
+    option (builtin) = {
+        endian = big;
+    };
+}

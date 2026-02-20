@@ -1,0 +1,21 @@
+package simple;
+
+enum Direction : u8 {
+    North = 0;
+    South = 1;
+    East = 2;
+    West = 3;
+}
+
+struct Header {
+    magic    u32;
+    version  u16;
+    flags    u8;
+    name     string [terminator = 0x00];
+}
+
+struct Packet {
+    header  Header;
+    length  u32;
+    payload bytes[length];
+}
