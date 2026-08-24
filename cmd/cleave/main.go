@@ -21,7 +21,7 @@ func main() {
 		kong.Description(`A declarative binary format parser generator.
 
 Cleave reads .clv spec files that describe binary formats and generates
-parser code in Python or C++. The generated code can parse raw bytes into
+parser code in Python, C++, or Rust. The generated code can parse raw bytes into
 structured data, serialize back to bytes, and convert to JSON.
 
 Examples:
@@ -33,6 +33,12 @@ Examples:
 
   # Generate a C++ parser into a specific directory:
   cleave generate --lang cpp --out src/generated format.clv
+
+  # Generate a Rust 2024 crate:
+  cleave generate --lang rust --out generated format.clv
+
+  # Generate one Rust source file without Cargo metadata:
+  cleave generate --lang rust --no-cargo --out generated format.clv
 
   # Format a spec file in place:
   cleave fmt format.clv

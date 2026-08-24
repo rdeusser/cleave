@@ -160,7 +160,7 @@ Container Container::parse(const uint8_t* buf, size_t len, size_t& offset) {
     std::memcpy(&result.record_count, buf + offset, 4);
     result.record_count = swap32(result.record_count);
     offset += 4;
-    for (size_t i = 0; i < result.header.record_count; ++i) {
+    for (size_t i = 0; i < result.record_count; ++i) {
         result.records.push_back(Record::parse(buf, len, offset));
     }
     return result;
@@ -192,7 +192,7 @@ std::vector<uint8_t> Container::to_bytes() const {
         _buf.insert(_buf.end(), _tmp.begin(), _tmp.end());
     }
     {
-        uint32_t _tmp = swap32(record_count);
+        uint32_t _tmp = swap32(static_cast<uint32_t>(records.size()));
         uint8_t _raw[4];
         std::memcpy(_raw, &_tmp, 4);
         _buf.insert(_buf.end(), _raw, _raw + 4);

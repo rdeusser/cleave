@@ -123,7 +123,7 @@ class Container:
         record_count = struct.unpack_from(">I", buf, offset)[0]
         offset += 4
         records = []
-        for _ in range(header.record_count):
+        for _ in range(record_count):
             _item, offset = Record.parse(buf, offset)
             records.append(_item)
         return cls(
@@ -145,7 +145,7 @@ class Container:
     def to_bytes(self) -> bytes:
         _buf = bytearray()
         _buf += self.header.to_bytes()
-        _buf += struct.pack(">I", self.record_count)
+        _buf += struct.pack(">I", len(self.records))
         for _item in self.records:
             _buf += _item.to_bytes()
         return bytes(_buf)

@@ -179,7 +179,15 @@ func translateExpr(e celast.Expr) (*ExprNode, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ExprNode{Kind: ExprSelect, Operand: operand, Field: sel.FieldName()}, nil
+		selectExpr := &ExprNode{Kind: ExprSelect, Operand: operand, Field: sel.FieldName()}
+		if sel.IsTestOnly() {
+			return &ExprNode{
+				Kind:     ExprCall,
+				FuncName: "has",
+				Args:     []*ExprNode{selectExpr},
+			}, nil
+		}
+		return selectExpr, nil
 	case celast.CallKind:
 		return translateCall(e)
 	default:

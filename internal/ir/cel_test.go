@@ -108,6 +108,23 @@ func TestParseCELSize(t *testing.T) {
 	}
 }
 
+func TestParseCELHas(t *testing.T) {
+	expr, err := ParseCELExpr("has(header.extra)")
+	if err != nil {
+		t.Fatalf("ParseCELExpr() error = %v", err)
+	}
+	if expr.Kind != ExprCall || expr.FuncName != "has" {
+		t.Fatalf("ParseCELExpr() = %+v, want has call", expr)
+	}
+	if len(expr.Args) != 1 {
+		t.Fatalf("len(ParseCELExpr().Args) = %d, want 1", len(expr.Args))
+	}
+	selection := expr.Args[0]
+	if selection.Kind != ExprSelect || selection.Field != "extra" {
+		t.Errorf("ParseCELExpr().Args[0] = %+v, want selection of extra", selection)
+	}
+}
+
 func TestContainsThis(t *testing.T) {
 	exprWithThis, err := ParseCELExpr("this >= 1")
 	if err != nil {

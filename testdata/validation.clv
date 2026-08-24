@@ -54,7 +54,7 @@ struct Record {
 struct Container {
     header       Header;
     record_count u32;
-    records      Record [count = header.record_count];
+    records      Record [count = record_count];
 
     option (builtin) = {
         endian = big;
