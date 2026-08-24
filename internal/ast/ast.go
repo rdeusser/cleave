@@ -201,45 +201,29 @@ func (p *PackageDecl) nodeSpan() token.Span {
 	return token.Span{Start: p.Keyword, End: p.Semicolon + 1}
 }
 
-func (d *ImportDecl) nodeSpan() token.Span {
-	return token.Span{Start: d.Keyword, End: d.Semicolon + 1}
-}
+func (d *ImportDecl) nodeSpan() token.Span { return token.Span{Start: d.Keyword, End: d.Semicolon + 1} }
 
-func (s *StructDecl) nodeSpan() token.Span {
-	return token.Span{Start: s.Keyword, End: s.RBrace + 1}
-}
+func (s *StructDecl) nodeSpan() token.Span { return token.Span{Start: s.Keyword, End: s.RBrace + 1} }
+func (s *StructDecl) declNode()            {}
 
-func (s *StructDecl) declNode() {}
+func (e *EnumDecl) nodeSpan() token.Span { return token.Span{Start: e.Keyword, End: e.RBrace + 1} }
+func (e *EnumDecl) declNode()            {}
 
-func (e *EnumDecl) nodeSpan() token.Span {
-	return token.Span{Start: e.Keyword, End: e.RBrace + 1}
-}
-
-func (e *EnumDecl) declNode() {}
-
-func (f *FormatDecl) nodeSpan() token.Span {
-	return token.Span{Start: f.Keyword, End: f.RBrace + 1}
-}
-
-func (f *FormatDecl) declNode() {}
+func (f *FormatDecl) nodeSpan() token.Span { return token.Span{Start: f.Keyword, End: f.RBrace + 1} }
+func (f *FormatDecl) declNode()            {}
 
 func (kv *FormatKV) nodeSpan() token.Span {
 	return token.Span{Start: kv.Key.Span.Start, End: kv.Semicolon + 1}
 }
 
-func (u *UnionDecl) nodeSpan() token.Span {
-	return token.Span{Start: u.Keyword, End: u.RBrace + 1}
-}
-
-func (u *UnionDecl) declNode() {}
+func (u *UnionDecl) nodeSpan() token.Span { return token.Span{Start: u.Keyword, End: u.RBrace + 1} }
+func (u *UnionDecl) declNode()            {}
 
 func (c *UnionCase) nodeSpan() token.Span {
 	return token.Span{Start: c.Value.nodeSpan().Start, End: c.Semicolon + 1}
 }
 
-func (m *MatchExpr) nodeSpan() token.Span {
-	return token.Span{Start: m.Keyword, End: m.RBrace + 1}
-}
+func (m *MatchExpr) nodeSpan() token.Span { return token.Span{Start: m.Keyword, End: m.RBrace + 1} }
 
 func (v *EnumVariant) nodeSpan() token.Span {
 	return token.Span{Start: v.Name.Span.Start, End: v.Semicolon + 1}
@@ -268,11 +252,8 @@ func (e *BlockEntry) nodeSpan() token.Span {
 	return token.Span{Start: e.Key.Span.Start, End: e.Value.nodeSpan().End}
 }
 
-func (b *BlockExpr) nodeSpan() token.Span {
-	return token.Span{Start: b.LBrace, End: b.RBrace + 1}
-}
-
-func (b *BlockExpr) exprNode() {}
+func (b *BlockExpr) nodeSpan() token.Span { return token.Span{Start: b.LBrace, End: b.RBrace + 1} }
+func (b *BlockExpr) exprNode()            {}
 
 func (o *OptionBlock) nodeSpan() token.Span {
 	return token.Span{Start: o.Keyword, End: o.Semicolon + 1}

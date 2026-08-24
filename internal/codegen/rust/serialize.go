@@ -53,13 +53,7 @@ func (w *writer) writeSerialize(structure *ir.Struct) error {
 	return nil
 }
 
-func (w *writer) writeFieldBytes(
-	structure *ir.Struct,
-	field,
-	source *ir.Field,
-	access,
-	indent string,
-) error {
+func (w *writer) writeFieldBytes(structure *ir.Struct, field, source *ir.Field, access, indent string) error {
 	endian := field.EffectiveEndian(structure.Options.Endian)
 	if source != nil {
 		return w.writeComputedLength(field, source, endian, indent)
@@ -128,12 +122,7 @@ func (w *writer) writeTypeBytes(
 	}
 }
 
-func (w *writer) writeElementBytes(
-	fieldType ir.FieldType,
-	access string,
-	endian ir.Endian,
-	indent string,
-) error {
+func (w *writer) writeElementBytes(fieldType ir.FieldType, access string, endian ir.Endian, indent string) error {
 	switch fieldType.Kind {
 	case ir.KindPrimitive:
 		return writePrimitiveBytes(fieldType.Primitive, "*"+access, endian, indent, &w.sb)
@@ -154,51 +143,6 @@ func (w *writer) writeElementBytes(
 	default:
 		return fmt.Errorf("rust codegen: unsupported serialized element kind %d", fieldType.Kind)
 	}
-}
-
-func writePrimitiveBytes(
-	primitive ir.PrimitiveType,
-	access string,
-	endian ir.Endian,
-	indent string,
-	result *strings.Builder,
-) error {
-	if primitive == ir.Bytes || primitive == ir.String {
-		return fmt.Errorf("rust codegen: %s is not a scalar primitive", primitive)
-	}
-	order := "le"
-	if endian == ir.BigEndian {
-		order = "be"
-	}
-	if primitive.Size() == 1 {
-		order = "ne"
-	}
-	fmt.Fprintf(
-		result,
-		"%sbuf.extend_from_slice(&(%s).to_%s_bytes());\n",
-		indent,
-		access,
-		order,
-	)
-	return nil
-}
-
-func writeRawBytes(
-	field *ir.Field,
-	access,
-	indent string,
-	result *strings.Builder,
-) error {
-	switch field.Type.Array.Kind {
-	case ir.NotArray, ir.FixedSize, ir.LengthRef, ir.CountRef, ir.RestArray:
-		fmt.Fprintf(result, "%sbuf.extend_from_slice(%s);\n", indent, access)
-	case ir.Terminator:
-		fmt.Fprintf(result, "%sbuf.extend_from_slice(%s);\n", indent, access)
-		fmt.Fprintf(result, "%sbuf.push(%s_u8);\n", indent, rustInt(field.Type.Array.Sentinel))
-	default:
-		return fmt.Errorf("rust codegen: unsupported raw byte array kind %d", field.Type.Array.Kind)
-	}
-	return nil
 }
 
 func (w *writer) writeTextBytes(field *ir.Field, access, indent string) error {
@@ -262,12 +206,7 @@ func (w *writer) writeFixedSizeCheck(fieldName string, size int64, actual, inden
 	fmt.Fprintf(&w.sb, "%s}\n", indent)
 }
 
-func (w *writer) writeComputedLength(
-	field,
-	source *ir.Field,
-	endian ir.Endian,
-	indent string,
-) error {
+func (w *writer) writeComputedLength(field, source *ir.Field, endian ir.Endian, indent string) error {
 	if field.Type.Kind != ir.KindPrimitive || !field.Type.Primitive.IsInteger() {
 		return fmt.Errorf("rust codegen: auto-computed field %s must be an integer primitive", field.Name)
 	}
@@ -288,36 +227,6 @@ func (w *writer) writeComputedLength(
 	fmt.Fprintf(&w.sb, "%s    target: %s,\n", indent, rustString(typ))
 	fmt.Fprintf(&w.sb, "%s})?;\n", indent)
 	return writePrimitiveBytes(field.Type.Primitive, "computed", endian, indent, &w.sb)
-}
-
-func serializedLengthExpression(field *ir.Field, indent string) string {
-	access := "self." + rustIdent(field.Name)
-	if isTextField(field) {
-		encoding := field.Encoding
-		if encoding == "" {
-			encoding = "utf-8"
-		}
-		if field.Condition != nil {
-			return fmt.Sprintf(
-				"if let ::std::option::Option::Some(value) = &%s {\n%s    self::encode_text(value.as_str(), %s)?.len()\n%s} else {\n%s    0\n%s}",
-				access,
-				indent,
-				rustString(encoding),
-				indent,
-				indent,
-				indent,
-			)
-		}
-		return fmt.Sprintf(
-			"self::encode_text(%s.as_str(), %s)?.len()",
-			access,
-			rustString(encoding),
-		)
-	}
-	if field.Condition != nil {
-		return access + ".as_ref().map_or(0, ::std::vec::Vec::len)"
-	}
-	return access + ".len()"
 }
 
 func (w *writer) writeMatchBytes(
@@ -421,6 +330,76 @@ func (w *writer) writeMatchBytes(
 	return nil
 }
 
+func writePrimitiveBytes(
+	primitive ir.PrimitiveType,
+	access string,
+	endian ir.Endian,
+	indent string,
+	sb *strings.Builder,
+) error {
+	if primitive == ir.Bytes || primitive == ir.String {
+		return fmt.Errorf("rust codegen: %s is not a scalar primitive", primitive)
+	}
+	order := "le"
+	if endian == ir.BigEndian {
+		order = "be"
+	}
+	if primitive.Size() == 1 {
+		order = "ne"
+	}
+	fmt.Fprintf(
+		sb,
+		"%sbuf.extend_from_slice(&(%s).to_%s_bytes());\n",
+		indent,
+		access,
+		order,
+	)
+	return nil
+}
+
+func writeRawBytes(field *ir.Field, access, indent string, sb *strings.Builder) error {
+	switch field.Type.Array.Kind {
+	case ir.NotArray, ir.FixedSize, ir.LengthRef, ir.CountRef, ir.RestArray:
+		fmt.Fprintf(sb, "%sbuf.extend_from_slice(%s);\n", indent, access)
+	case ir.Terminator:
+		fmt.Fprintf(sb, "%sbuf.extend_from_slice(%s);\n", indent, access)
+		fmt.Fprintf(sb, "%sbuf.push(%s_u8);\n", indent, rustInt(field.Type.Array.Sentinel))
+	default:
+		return fmt.Errorf("rust codegen: unsupported raw byte array kind %d", field.Type.Array.Kind)
+	}
+	return nil
+}
+
+func serializedLengthExpression(field *ir.Field, indent string) string {
+	access := "self." + rustIdent(field.Name)
+	if isTextField(field) {
+		encoding := field.Encoding
+		if encoding == "" {
+			encoding = "utf-8"
+		}
+		if field.Condition != nil {
+			return fmt.Sprintf(
+				"if let ::std::option::Option::Some(value) = &%s {\n%s    self::encode_text(value.as_str(), %s)?.len()\n%s} else {\n%s    0\n%s}",
+				access,
+				indent,
+				rustString(encoding),
+				indent,
+				indent,
+				indent,
+			)
+		}
+		return fmt.Sprintf(
+			"self::encode_text(%s.as_str(), %s)?.len()",
+			access,
+			rustString(encoding),
+		)
+	}
+	if field.Condition != nil {
+		return access + ".as_ref().map_or(0, ::std::vec::Vec::len)"
+	}
+	return access + ".len()"
+}
+
 func autoComputeSources(structure *ir.Struct) (map[string]*ir.Field, map[string]*ir.Field) {
 	lengths := make(map[string]*ir.Field)
 	counts := make(map[string]*ir.Field)
@@ -437,6 +416,4 @@ func autoComputeSources(structure *ir.Struct) (map[string]*ir.Field, map[string]
 	return lengths, counts
 }
 
-func selfExpression(reference string) string {
-	return "self." + referenceExpression(reference)
-}
+func selfExpression(reference string) string { return "self." + referenceExpression(reference) }

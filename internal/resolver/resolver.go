@@ -9,39 +9,6 @@ import (
 	"github.com/rdeusser/cleave/internal/parser"
 )
 
-func Resolve(entryPath string) (*ast.File, []byte, []error) {
-	r := &resolver{
-		parsed:    make(map[string]*ast.File),
-		resolving: make(map[string]bool),
-	}
-
-	absPath, err := filepath.Abs(entryPath)
-	if err != nil {
-		return nil, nil, []error{fmt.Errorf("cannot resolve path %s: %w", entryPath, err)}
-	}
-
-	entrySrc, errs := r.resolveAll(absPath, nil)
-	if len(errs) > 0 {
-		return nil, entrySrc, errs
-	}
-
-	// Collect imported declarations (for type lookup) separately from entry declarations.
-	visited := make(map[string]bool)
-	var importedDecls []ast.Decl
-	r.collectImportedDecls(absPath, visited, &importedDecls)
-
-	entryFile := r.parsed[absPath]
-	merged := &ast.File{
-		Package:       entryFile.Package,
-		Imports:       entryFile.Imports,
-		Decls:         entryFile.Decls,
-		ImportedDecls: importedDecls,
-		Comments:      entryFile.Comments,
-	}
-
-	return merged, entrySrc, nil
-}
-
 type resolver struct {
 	parsed    map[string]*ast.File // absolute path → parsed file (own decls only)
 	resolving map[string]bool      // absolute paths currently being resolved (cycle detection)
@@ -130,6 +97,39 @@ func (r *resolver) collectAllDecls(absPath string, visited map[string]bool, out 
 	}
 
 	*out = append(*out, file.Decls...)
+}
+
+func Resolve(entryPath string) (*ast.File, []byte, []error) {
+	r := &resolver{
+		parsed:    make(map[string]*ast.File),
+		resolving: make(map[string]bool),
+	}
+
+	absPath, err := filepath.Abs(entryPath)
+	if err != nil {
+		return nil, nil, []error{fmt.Errorf("cannot resolve path %s: %w", entryPath, err)}
+	}
+
+	data, errs := r.resolveAll(absPath, nil)
+	if len(errs) > 0 {
+		return nil, data, errs
+	}
+
+	// Collect imported declarations (for type lookup) separately from entry declarations.
+	visited := make(map[string]bool)
+	var importedDecls []ast.Decl
+	r.collectImportedDecls(absPath, visited, &importedDecls)
+
+	entryFile := r.parsed[absPath]
+	merged := &ast.File{
+		Package:       entryFile.Package,
+		Imports:       entryFile.Imports,
+		Decls:         entryFile.Decls,
+		ImportedDecls: importedDecls,
+		Comments:      entryFile.Comments,
+	}
+
+	return merged, data, nil
 }
 
 func formatCycle(stack []string, target string) string {

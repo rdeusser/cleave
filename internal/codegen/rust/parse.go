@@ -82,11 +82,7 @@ func (w *writer) writeParse(structure *ir.Struct) error {
 	return nil
 }
 
-func (w *writer) writeFieldParse(
-	structure *ir.Struct,
-	field *ir.Field,
-	context parseContext,
-) error {
+func (w *writer) writeFieldParse(structure *ir.Struct, field *ir.Field, context parseContext) error {
 	if field.Condition == nil {
 		expression, err := w.fieldParseExpression(structure, field, "        ", context)
 		if err != nil {
@@ -121,17 +117,6 @@ func (w *writer) writeFieldParse(
 	w.sb.WriteString("            ::std::option::Option::None\n")
 	w.sb.WriteString("        };\n")
 	return nil
-}
-
-func writeRustLet(result *strings.Builder, indent, name, expression string) {
-	line := fmt.Sprintf("%slet %s = %s;", indent, name, expression)
-	if !strings.Contains(expression, "\n") && len(line) > 100 {
-		fmt.Fprintf(result, "%slet %s =\n", indent, name)
-		fmt.Fprintf(result, "%s    %s;\n", indent, expression)
-		return
-	}
-	result.WriteString(line)
-	result.WriteString("\n")
 }
 
 func (w *writer) writeValidations(field *ir.Field, thisName, indent string) error {
@@ -170,53 +155,6 @@ func (w *writer) writeValidations(field *ir.Field, thisName, indent string) erro
 		fmt.Fprintf(&w.sb, "%s}\n", indent)
 	}
 	return nil
-}
-
-func trimOuterParentheses(expression string) (string, bool) {
-	if len(expression) < 2 || expression[0] != '(' || expression[len(expression)-1] != ')' {
-		return expression, false
-	}
-
-	depth := 0
-	inString := false
-	escaped := false
-	for i := 0; i < len(expression); i++ {
-		character := expression[i]
-		if inString {
-			if escaped {
-				escaped = false
-				continue
-			}
-			if character == '\\' {
-				escaped = true
-				continue
-			}
-			if character == '"' {
-				inString = false
-			}
-			continue
-		}
-		if character == '"' {
-			inString = true
-			continue
-		}
-		switch character {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 && i != len(expression)-1 {
-				return expression, false
-			}
-			if depth < 0 {
-				return expression, false
-			}
-		}
-	}
-	if depth != 0 || inString {
-		return expression, false
-	}
-	return expression[1 : len(expression)-1], true
 }
 
 func (w *writer) fieldParseExpression(
@@ -266,18 +204,18 @@ func (w *writer) matchParseExpression(
 		return "", errors.New("missing generated match type")
 	}
 
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(&result, "%s    #[allow(\n", indent)
-	fmt.Fprintf(&result, "%s        clippy::match_same_arms,\n", indent)
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(&sb, "%s    #[allow(\n", indent)
+	fmt.Fprintf(&sb, "%s        clippy::match_same_arms,\n", indent)
 	fmt.Fprintf(
-		&result,
+		&sb,
 		"%s        reason = \"schema cases can share payload parsing\"\n",
 		indent,
 	)
-	fmt.Fprintf(&result, "%s    )]\n", indent)
+	fmt.Fprintf(&sb, "%s    )]\n", indent)
 	fmt.Fprintf(
-		&result,
+		&sb,
 		"%s    match %s {\n",
 		indent,
 		referenceExpression(field.Match.TagField),
@@ -299,7 +237,7 @@ func (w *writer) matchParseExpression(
 			return "", err
 		}
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s        %s => %s::%s(%s),\n",
 			indent,
 			rustInt(matchCase.Value),
@@ -325,7 +263,7 @@ func (w *writer) matchParseExpression(
 			return "", err
 		}
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s        _ => %s::%s(%s),\n",
 			indent,
 			match.name,
@@ -333,32 +271,32 @@ func (w *writer) matchParseExpression(
 			payload,
 		)
 	} else {
-		fmt.Fprintf(&result, "%s        _ => {\n", indent)
-		fmt.Fprintf(&result, "%s            return Err(Error::UnknownTag {\n", indent)
+		fmt.Fprintf(&sb, "%s        _ => {\n", indent)
+		fmt.Fprintf(&sb, "%s            return Err(Error::UnknownTag {\n", indent)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s                struct_name: %s,\n",
 			indent,
 			rustString(structure.Name),
 		)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s                field: %s,\n",
 			indent,
 			rustString(field.Name),
 		)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s                value: i128::from(%s),\n",
 			indent,
 			referenceExpression(field.Match.TagField),
 		)
-		fmt.Fprintf(&result, "%s            });\n", indent)
-		fmt.Fprintf(&result, "%s        }\n", indent)
+		fmt.Fprintf(&sb, "%s            });\n", indent)
+		fmt.Fprintf(&sb, "%s        }\n", indent)
 	}
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String(), nil
+	fmt.Fprintf(&sb, "%s    }\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String(), nil
 }
 
 func (w *writer) arrayParseExpression(
@@ -413,11 +351,7 @@ func (w *writer) arrayParseExpression(
 	}
 }
 
-func (w *writer) elementParseExpression(
-	fieldType ir.FieldType,
-	endian ir.Endian,
-	context parseContext,
-) (string, error) {
+func (w *writer) elementParseExpression(fieldType ir.FieldType, endian ir.Endian, context parseContext) (string, error) {
 	switch fieldType.Kind {
 	case ir.KindPrimitive:
 		return primitiveParseExpression(fieldType.Primitive, endian, context)
@@ -443,143 +377,16 @@ func (w *writer) elementParseExpression(
 	}
 }
 
-func primitiveParseExpression(
-	primitive ir.PrimitiveType,
-	endian ir.Endian,
-	context parseContext,
-) (string, error) {
-	typ, err := rustPrimitive(primitive)
-	if err != nil {
-		return "", err
-	}
-	order := "le"
-	if endian == ir.BigEndian {
-		order = "be"
-	}
-	if primitive.Size() == 1 {
-		order = "ne"
-	}
-	return fmt.Sprintf(
-		"%s::from_%s_bytes(self::read_array::<%d>(%s, %s)?)",
-		typ,
-		order,
-		primitive.Size(),
-		context.buf,
-		context.offset,
-	), nil
-}
-
-func fixedArrayParseExpression(element, fieldName string, size int64, indent string) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(&result, "%s    let mut values = ::std::vec::Vec::with_capacity(%s);\n", indent, rustInt(size))
-	fmt.Fprintf(&result, "%s    for _ in 0..%s {\n", indent, rustInt(size))
-	fmt.Fprintf(&result, "%s        values.push(%s);\n", indent, element)
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(
-		&result,
-		"%s    <[_; %s]>::try_from(values).map_err(|values| Error::FixedSize {\n",
-		indent,
-		rustInt(size),
-	)
-	fmt.Fprintf(&result, "%s        field: %s,\n", indent, rustString(fieldName))
-	fmt.Fprintf(&result, "%s        expected: %s,\n", indent, rustInt(size))
-	fmt.Fprintf(&result, "%s        actual: values.len(),\n", indent)
-	fmt.Fprintf(&result, "%s    })?\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func countedArrayParseExpression(element, fieldName, reference, indent string) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	writeCountConversion(&result, indent+"    ", fieldName, reference)
-	fmt.Fprintf(&result, "%s    let mut values = ::std::vec::Vec::with_capacity(count);\n", indent)
-	fmt.Fprintf(&result, "%s    for _ in 0..count {\n", indent)
-	fmt.Fprintf(&result, "%s        values.push(%s);\n", indent, element)
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(&result, "%s    values\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func restArrayParseExpression(
-	element string,
-	checkProgress bool,
-	fieldName,
-	indent string,
-	context parseContext,
-) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(&result, "%s    let mut values = ::std::vec::Vec::new();\n", indent)
-	fmt.Fprintf(
-		&result,
-		"%s    while *%s < %s.len() {\n",
-		indent,
-		context.offset,
-		context.buf,
-	)
-	if checkProgress {
-		fmt.Fprintf(&result, "%s        let previous = *%s;\n", indent, context.offset)
-	}
-	fmt.Fprintf(&result, "%s        let value = %s;\n", indent, element)
-	if checkProgress {
-		fmt.Fprintf(&result, "%s        if *%s == previous {\n", indent, context.offset)
-		fmt.Fprintf(&result, "%s            return Err(Error::NoProgress {\n", indent)
-		fmt.Fprintf(&result, "%s                field: %s,\n", indent, rustString(fieldName))
-		fmt.Fprintf(&result, "%s                offset: previous,\n", indent)
-		fmt.Fprintf(&result, "%s            });\n", indent)
-		fmt.Fprintf(&result, "%s        }\n", indent)
-	}
-	fmt.Fprintf(&result, "%s        values.push(value);\n", indent)
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(&result, "%s    values\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func terminatedArrayParseExpression(
-	element string,
-	sentinel int64,
-	indent string,
-	context parseContext,
-) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(&result, "%s    let mut values = ::std::vec::Vec::new();\n", indent)
-	fmt.Fprintf(
-		&result,
-		"%s    while *%s < %s.len() {\n",
-		indent,
-		context.offset,
-		context.buf,
-	)
-	fmt.Fprintf(&result, "%s        let value = %s;\n", indent, element)
-	fmt.Fprintf(&result, "%s        if value == %s {\n", indent, rustInt(sentinel))
-	fmt.Fprintf(&result, "%s            break;\n", indent)
-	fmt.Fprintf(&result, "%s        }\n", indent)
-	fmt.Fprintf(&result, "%s        values.push(value);\n", indent)
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(&result, "%s    values\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func (w *writer) rawBytesParseExpression(
-	field *ir.Field,
-	indent string,
-	context parseContext,
-) (string, error) {
+func (w *writer) rawBytesParseExpression(field *ir.Field, indent string, context parseContext) (string, error) {
 	array := field.Type.Array
 	switch array.Kind {
 	case ir.NotArray:
 		return "::std::vec::Vec::new()", nil
 	case ir.FixedSize:
-		var result strings.Builder
-		result.WriteString("{\n")
+		var sb strings.Builder
+		sb.WriteString("{\n")
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    let bytes = self::take(%s, %s, %s)?;\n",
 			indent,
 			context.buf,
@@ -587,17 +394,17 @@ func (w *writer) rawBytesParseExpression(
 			rustInt(array.FixedSize),
 		)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    <[u8; %s]>::try_from(bytes).map_err(|_| Error::FixedSize {\n",
 			indent,
 			rustInt(array.FixedSize),
 		)
-		fmt.Fprintf(&result, "%s        field: %s,\n", indent, rustString(field.Name))
-		fmt.Fprintf(&result, "%s        expected: %s,\n", indent, rustInt(array.FixedSize))
-		fmt.Fprintf(&result, "%s        actual: bytes.len(),\n", indent)
-		fmt.Fprintf(&result, "%s    })?\n", indent)
-		fmt.Fprintf(&result, "%s}", indent)
-		return result.String(), nil
+		fmt.Fprintf(&sb, "%s        field: %s,\n", indent, rustString(field.Name))
+		fmt.Fprintf(&sb, "%s        expected: %s,\n", indent, rustInt(array.FixedSize))
+		fmt.Fprintf(&sb, "%s        actual: bytes.len(),\n", indent)
+		fmt.Fprintf(&sb, "%s    })?\n", indent)
+		fmt.Fprintf(&sb, "%s}", indent)
+		return sb.String(), nil
 	case ir.LengthRef:
 		return countedBytesParseExpression(field.Name, array.LengthRef, indent, context), nil
 	case ir.CountRef:
@@ -611,93 +418,7 @@ func (w *writer) rawBytesParseExpression(
 	}
 }
 
-func countedBytesParseExpression(
-	fieldName,
-	reference,
-	indent string,
-	context parseContext,
-) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	writeCountConversion(&result, indent+"    ", fieldName, reference)
-	fmt.Fprintf(
-		&result,
-		"%s    self::take(%s, %s, count)?.to_vec()\n",
-		indent,
-		context.buf,
-		context.offset,
-	)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func restBytesParseExpression(indent string, context parseContext) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(
-		&result,
-		"%s    let remaining = %s.len().saturating_sub(*%s);\n",
-		indent,
-		context.buf,
-		context.offset,
-	)
-	fmt.Fprintf(
-		&result,
-		"%s    self::take(%s, %s, remaining)?.to_vec()\n",
-		indent,
-		context.buf,
-		context.offset,
-	)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
-}
-
-func terminatedBytesParseExpression(
-	fieldName string,
-	sentinel int64,
-	indent string,
-	context parseContext,
-) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	fmt.Fprintf(&result, "%s    let start = *%s;\n", indent, context.offset)
-	fmt.Fprintf(&result, "%s    let mut end = %s.len();\n", indent, context.buf)
-	fmt.Fprintf(
-		&result,
-		"%s    while let Some(byte) = %s.get(*%s) {\n",
-		indent,
-		context.buf,
-		context.offset,
-	)
-	fmt.Fprintf(&result, "%s        if *byte == %s {\n", indent, rustInt(sentinel))
-	fmt.Fprintf(&result, "%s            end = *%s;\n", indent, context.offset)
-	fmt.Fprintf(&result, "%s            *%s += 1;\n", indent, context.offset)
-	fmt.Fprintf(&result, "%s            break;\n", indent)
-	fmt.Fprintf(&result, "%s        }\n", indent)
-	fmt.Fprintf(&result, "%s        *%s += 1;\n", indent, context.offset)
-	fmt.Fprintf(&result, "%s    }\n", indent)
-	fmt.Fprintf(&result, "%s    %s.get(start..end)\n", indent, context.buf)
-	fmt.Fprintf(&result, "%s        .ok_or(Error::UnexpectedEof {\n", indent)
-	fmt.Fprintf(&result, "%s            offset: start,\n", indent)
-	fmt.Fprintf(&result, "%s            needed: end.saturating_sub(start),\n", indent)
-	fmt.Fprintf(
-		&result,
-		"%s            remaining: %s.len().saturating_sub(start),\n",
-		indent,
-		context.buf,
-	)
-	fmt.Fprintf(&result, "%s        })?\n", indent)
-	fmt.Fprintf(&result, "%s        .to_vec()\n", indent)
-	fmt.Fprintf(&result, "%s}", indent)
-	_ = fieldName
-	return result.String()
-}
-
-func (w *writer) textParseExpression(
-	field *ir.Field,
-	indent string,
-	context parseContext,
-) (string, error) {
+func (w *writer) textParseExpression(field *ir.Field, indent string, context parseContext) (string, error) {
 	encoding := field.Encoding
 	if encoding == "" {
 		encoding = "utf-8"
@@ -731,30 +452,30 @@ func (w *writer) textParseExpression(
 			context,
 		), nil
 	case ir.RestArray:
-		var result strings.Builder
-		result.WriteString("{\n")
+		var sb strings.Builder
+		sb.WriteString("{\n")
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    let remaining = %s.len().saturating_sub(*%s);\n",
 			indent,
 			context.buf,
 			context.offset,
 		)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    let bytes = self::take(%s, %s, remaining)?;\n",
 			indent,
 			context.buf,
 			context.offset,
 		)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    self::decode_text(bytes, %s)?\n",
 			indent,
 			rustString(encoding),
 		)
-		fmt.Fprintf(&result, "%s}", indent)
-		return result.String(), nil
+		fmt.Fprintf(&sb, "%s}", indent)
+		return sb.String(), nil
 	case ir.Terminator:
 		raw := terminatedBytesParseExpression(
 			field.Name,
@@ -762,100 +483,341 @@ func (w *writer) textParseExpression(
 			indent+"    ",
 			context,
 		)
-		var result strings.Builder
-		result.WriteString("{\n")
-		fmt.Fprintf(&result, "%s    let bytes = %s;\n", indent, raw)
+		var sb strings.Builder
+		sb.WriteString("{\n")
+		fmt.Fprintf(&sb, "%s    let bytes = %s;\n", indent, raw)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    self::decode_text(&bytes, %s)?\n",
 			indent,
 			rustString(encoding),
 		)
-		fmt.Fprintf(&result, "%s}", indent)
-		return result.String(), nil
+		fmt.Fprintf(&sb, "%s}", indent)
+		return sb.String(), nil
 	case ir.FixedTerminator:
-		var result strings.Builder
-		result.WriteString("{\n")
+		var sb strings.Builder
+		sb.WriteString("{\n")
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    let bytes = self::take(%s, %s, %s)?;\n",
 			indent,
 			context.buf,
 			context.offset,
 			rustInt(array.FixedSize),
 		)
-		fmt.Fprintf(&result, "%s    let end = bytes\n", indent)
-		fmt.Fprintf(&result, "%s        .iter()\n", indent)
+		fmt.Fprintf(&sb, "%s    let end = bytes\n", indent)
+		fmt.Fprintf(&sb, "%s        .iter()\n", indent)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s        .position(|byte| *byte == %s)\n",
 			indent,
 			rustInt(array.Sentinel),
 		)
-		fmt.Fprintf(&result, "%s        .unwrap_or(bytes.len());\n", indent)
-		fmt.Fprintf(&result, "%s    let text = bytes.get(..end).ok_or(Error::UnexpectedEof {\n", indent)
-		fmt.Fprintf(&result, "%s        offset: *%s,\n", indent, context.offset)
-		fmt.Fprintf(&result, "%s        needed: end,\n", indent)
-		fmt.Fprintf(&result, "%s        remaining: bytes.len(),\n", indent)
-		fmt.Fprintf(&result, "%s    })?;\n", indent)
+		fmt.Fprintf(&sb, "%s        .unwrap_or(bytes.len());\n", indent)
+		fmt.Fprintf(&sb, "%s    let text = bytes.get(..end).ok_or(Error::UnexpectedEof {\n", indent)
+		fmt.Fprintf(&sb, "%s        offset: *%s,\n", indent, context.offset)
+		fmt.Fprintf(&sb, "%s        needed: end,\n", indent)
+		fmt.Fprintf(&sb, "%s        remaining: bytes.len(),\n", indent)
+		fmt.Fprintf(&sb, "%s    })?;\n", indent)
 		fmt.Fprintf(
-			&result,
+			&sb,
 			"%s    self::decode_text(text, %s)?\n",
 			indent,
 			rustString(encoding),
 		)
-		fmt.Fprintf(&result, "%s}", indent)
-		return result.String(), nil
+		fmt.Fprintf(&sb, "%s}", indent)
+		return sb.String(), nil
 	default:
 		return "", fmt.Errorf("unsupported text array kind %d", array.Kind)
 	}
 }
 
-func decodedCountedBytesParseExpression(
-	fieldName,
-	reference,
-	encoding,
-	indent string,
-	context parseContext,
-) string {
-	var result strings.Builder
-	result.WriteString("{\n")
-	writeCountConversion(&result, indent+"    ", fieldName, reference)
+func (w *writer) lookupEnum(name string) *ir.Enum {
+	for _, enum := range w.pkg.Enums {
+		if enum.Name == name {
+			return enum
+		}
+	}
+	return nil
+}
+
+func writeRustLet(sb *strings.Builder, indent, name, expression string) {
+	line := fmt.Sprintf("%slet %s = %s;", indent, name, expression)
+	if !strings.Contains(expression, "\n") && len(line) > 100 {
+		fmt.Fprintf(sb, "%slet %s =\n", indent, name)
+		fmt.Fprintf(sb, "%s    %s;\n", indent, expression)
+		return
+	}
+	sb.WriteString(line)
+	sb.WriteString("\n")
+}
+
+func trimOuterParentheses(expression string) (string, bool) {
+	if len(expression) < 2 || expression[0] != '(' || expression[len(expression)-1] != ')' {
+		return expression, false
+	}
+
+	depth := 0
+	inString := false
+	escaped := false
+	for i := 0; i < len(expression); i++ {
+		character := expression[i]
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if character == '\\' {
+				escaped = true
+				continue
+			}
+			if character == '"' {
+				inString = false
+			}
+			continue
+		}
+		if character == '"' {
+			inString = true
+			continue
+		}
+		switch character {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i != len(expression)-1 {
+				return expression, false
+			}
+			if depth < 0 {
+				return expression, false
+			}
+		}
+	}
+	if depth != 0 || inString {
+		return expression, false
+	}
+	return expression[1 : len(expression)-1], true
+}
+
+func primitiveParseExpression(primitive ir.PrimitiveType, endian ir.Endian, context parseContext) (string, error) {
+	typ, err := rustPrimitive(primitive)
+	if err != nil {
+		return "", err
+	}
+	order := "le"
+	if endian == ir.BigEndian {
+		order = "be"
+	}
+	if primitive.Size() == 1 {
+		order = "ne"
+	}
+	return fmt.Sprintf(
+		"%s::from_%s_bytes(self::read_array::<%d>(%s, %s)?)",
+		typ,
+		order,
+		primitive.Size(),
+		context.buf,
+		context.offset,
+	), nil
+}
+
+func fixedArrayParseExpression(element, fieldName string, size int64, indent string) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(&sb, "%s    let mut values = ::std::vec::Vec::with_capacity(%s);\n", indent, rustInt(size))
+	fmt.Fprintf(&sb, "%s    for _ in 0..%s {\n", indent, rustInt(size))
+	fmt.Fprintf(&sb, "%s        values.push(%s);\n", indent, element)
+	fmt.Fprintf(&sb, "%s    }\n", indent)
 	fmt.Fprintf(
-		&result,
+		&sb,
+		"%s    <[_; %s]>::try_from(values).map_err(|values| Error::FixedSize {\n",
+		indent,
+		rustInt(size),
+	)
+	fmt.Fprintf(&sb, "%s        field: %s,\n", indent, rustString(fieldName))
+	fmt.Fprintf(&sb, "%s        expected: %s,\n", indent, rustInt(size))
+	fmt.Fprintf(&sb, "%s        actual: values.len(),\n", indent)
+	fmt.Fprintf(&sb, "%s    })?\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func countedArrayParseExpression(element, fieldName, reference, indent string) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	writeCountConversion(&sb, indent+"    ", fieldName, reference)
+	fmt.Fprintf(&sb, "%s    let mut values = ::std::vec::Vec::with_capacity(count);\n", indent)
+	fmt.Fprintf(&sb, "%s    for _ in 0..count {\n", indent)
+	fmt.Fprintf(&sb, "%s        values.push(%s);\n", indent, element)
+	fmt.Fprintf(&sb, "%s    }\n", indent)
+	fmt.Fprintf(&sb, "%s    values\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func restArrayParseExpression(element string, checkProgress bool, fieldName, indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(&sb, "%s    let mut values = ::std::vec::Vec::new();\n", indent)
+	fmt.Fprintf(
+		&sb,
+		"%s    while *%s < %s.len() {\n",
+		indent,
+		context.offset,
+		context.buf,
+	)
+	if checkProgress {
+		fmt.Fprintf(&sb, "%s        let previous = *%s;\n", indent, context.offset)
+	}
+	fmt.Fprintf(&sb, "%s        let value = %s;\n", indent, element)
+	if checkProgress {
+		fmt.Fprintf(&sb, "%s        if *%s == previous {\n", indent, context.offset)
+		fmt.Fprintf(&sb, "%s            return Err(Error::NoProgress {\n", indent)
+		fmt.Fprintf(&sb, "%s                field: %s,\n", indent, rustString(fieldName))
+		fmt.Fprintf(&sb, "%s                offset: previous,\n", indent)
+		fmt.Fprintf(&sb, "%s            });\n", indent)
+		fmt.Fprintf(&sb, "%s        }\n", indent)
+	}
+	fmt.Fprintf(&sb, "%s        values.push(value);\n", indent)
+	fmt.Fprintf(&sb, "%s    }\n", indent)
+	fmt.Fprintf(&sb, "%s    values\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func terminatedArrayParseExpression(element string, sentinel int64, indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(&sb, "%s    let mut values = ::std::vec::Vec::new();\n", indent)
+	fmt.Fprintf(
+		&sb,
+		"%s    while *%s < %s.len() {\n",
+		indent,
+		context.offset,
+		context.buf,
+	)
+	fmt.Fprintf(&sb, "%s        let value = %s;\n", indent, element)
+	fmt.Fprintf(&sb, "%s        if value == %s {\n", indent, rustInt(sentinel))
+	fmt.Fprintf(&sb, "%s            break;\n", indent)
+	fmt.Fprintf(&sb, "%s        }\n", indent)
+	fmt.Fprintf(&sb, "%s        values.push(value);\n", indent)
+	fmt.Fprintf(&sb, "%s    }\n", indent)
+	fmt.Fprintf(&sb, "%s    values\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func countedBytesParseExpression(fieldName, reference, indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	writeCountConversion(&sb, indent+"    ", fieldName, reference)
+	fmt.Fprintf(
+		&sb,
+		"%s    self::take(%s, %s, count)?.to_vec()\n",
+		indent,
+		context.buf,
+		context.offset,
+	)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func restBytesParseExpression(indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(
+		&sb,
+		"%s    let remaining = %s.len().saturating_sub(*%s);\n",
+		indent,
+		context.buf,
+		context.offset,
+	)
+	fmt.Fprintf(
+		&sb,
+		"%s    self::take(%s, %s, remaining)?.to_vec()\n",
+		indent,
+		context.buf,
+		context.offset,
+	)
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
+}
+
+func terminatedBytesParseExpression(fieldName string, sentinel int64, indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	fmt.Fprintf(&sb, "%s    let start = *%s;\n", indent, context.offset)
+	fmt.Fprintf(&sb, "%s    let mut end = %s.len();\n", indent, context.buf)
+	fmt.Fprintf(
+		&sb,
+		"%s    while let Some(byte) = %s.get(*%s) {\n",
+		indent,
+		context.buf,
+		context.offset,
+	)
+	fmt.Fprintf(&sb, "%s        if *byte == %s {\n", indent, rustInt(sentinel))
+	fmt.Fprintf(&sb, "%s            end = *%s;\n", indent, context.offset)
+	fmt.Fprintf(&sb, "%s            *%s += 1;\n", indent, context.offset)
+	fmt.Fprintf(&sb, "%s            break;\n", indent)
+	fmt.Fprintf(&sb, "%s        }\n", indent)
+	fmt.Fprintf(&sb, "%s        *%s += 1;\n", indent, context.offset)
+	fmt.Fprintf(&sb, "%s    }\n", indent)
+	fmt.Fprintf(&sb, "%s    %s.get(start..end)\n", indent, context.buf)
+	fmt.Fprintf(&sb, "%s        .ok_or(Error::UnexpectedEof {\n", indent)
+	fmt.Fprintf(&sb, "%s            offset: start,\n", indent)
+	fmt.Fprintf(&sb, "%s            needed: end.saturating_sub(start),\n", indent)
+	fmt.Fprintf(
+		&sb,
+		"%s            remaining: %s.len().saturating_sub(start),\n",
+		indent,
+		context.buf,
+	)
+	fmt.Fprintf(&sb, "%s        })?\n", indent)
+	fmt.Fprintf(&sb, "%s        .to_vec()\n", indent)
+	fmt.Fprintf(&sb, "%s}", indent)
+	_ = fieldName
+	return sb.String()
+}
+
+func decodedCountedBytesParseExpression(fieldName, reference, encoding, indent string, context parseContext) string {
+	var sb strings.Builder
+	sb.WriteString("{\n")
+	writeCountConversion(&sb, indent+"    ", fieldName, reference)
+	fmt.Fprintf(
+		&sb,
 		"%s    let bytes = self::take(%s, %s, count)?;\n",
 		indent,
 		context.buf,
 		context.offset,
 	)
 	fmt.Fprintf(
-		&result,
+		&sb,
 		"%s    self::decode_text(bytes, %s)?\n",
 		indent,
 		rustString(encoding),
 	)
-	fmt.Fprintf(&result, "%s}", indent)
-	return result.String()
+	fmt.Fprintf(&sb, "%s}", indent)
+	return sb.String()
 }
 
-func writeCountConversion(result *strings.Builder, indent, fieldName, reference string) {
-	fmt.Fprintf(result, "%slet raw_count = %s;\n", indent, referenceExpression(reference))
-	fmt.Fprintf(result, "%s#[allow(\n", indent)
-	fmt.Fprintf(result, "%s    clippy::unnecessary_fallible_conversions,\n", indent)
+func writeCountConversion(sb *strings.Builder, indent, fieldName, reference string) {
+	fmt.Fprintf(sb, "%slet raw_count = %s;\n", indent, referenceExpression(reference))
+	fmt.Fprintf(sb, "%s#[allow(\n", indent)
+	fmt.Fprintf(sb, "%s    clippy::unnecessary_fallible_conversions,\n", indent)
 	fmt.Fprintf(
-		result,
+		sb,
 		"%s    reason = \"length fields can use signed or wide integer types\"\n",
 		indent,
 	)
-	fmt.Fprintf(result, "%s)]\n", indent)
+	fmt.Fprintf(sb, "%s)]\n", indent)
 	fmt.Fprintf(
-		result,
+		sb,
 		"%slet count = usize::try_from(raw_count).map_err(|_| Error::InvalidLength {\n",
 		indent,
 	)
-	fmt.Fprintf(result, "%s    field: %s,\n", indent, rustString(fieldName))
-	fmt.Fprintf(result, "%s    value: i128::from(raw_count),\n", indent)
-	fmt.Fprintf(result, "%s})?;\n", indent)
+	fmt.Fprintf(sb, "%s    field: %s,\n", indent, rustString(fieldName))
+	fmt.Fprintf(sb, "%s    value: i128::from(raw_count),\n", indent)
+	fmt.Fprintf(sb, "%s})?;\n", indent)
 }
 
 func referenceExpression(reference string) string {
@@ -880,13 +842,4 @@ func isRawBytesField(field *ir.Field) bool {
 		return true
 	}
 	return field.Type.Primitive == ir.String && !isTextField(field)
-}
-
-func (w *writer) lookupEnum(name string) *ir.Enum {
-	for _, enum := range w.pkg.Enums {
-		if enum.Name == name {
-			return enum
-		}
-	}
-	return nil
 }

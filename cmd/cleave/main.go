@@ -57,8 +57,8 @@ func compileFile(path string) (*ir.Package, []byte, []string) {
 	file, src, resolveErrs := resolver.Resolve(path)
 	if len(resolveErrs) > 0 {
 		var errs []string
-		for _, e := range resolveErrs {
-			errs = append(errs, e.Error())
+		for _, err := range resolveErrs {
+			errs = append(errs, err.Error())
 		}
 		return nil, src, errs
 	}

@@ -29,89 +29,6 @@ var rustSpecialKeywords = map[string]struct{}{
 	"super": {},
 }
 
-func rustIdent(name string) string {
-	if _, ok := rustSpecialKeywords[name]; ok {
-		return name + "_"
-	}
-	if _, ok := rustKeywords[name]; ok {
-		return "r#" + name
-	}
-	return name
-}
-
-func matchName(structName, fieldName string) string {
-	return rustIdent(pascal(structName) + pascal(fieldName))
-}
-
-func pascal(name string) string {
-	parts := strings.Split(name, "_")
-	var result strings.Builder
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		runes := []rune(part)
-		runes[0] = unicode.ToUpper(runes[0])
-		result.WriteString(string(runes))
-	}
-	if result.Len() == 0 {
-		return "Value"
-	}
-	return result.String()
-}
-
-func rustString(value string) string {
-	var result strings.Builder
-	result.WriteByte('"')
-	for _, r := range value {
-		switch r {
-		case '\\':
-			result.WriteString("\\\\")
-		case '"':
-			result.WriteString("\\\"")
-		case '\n':
-			result.WriteString("\\n")
-		case '\r':
-			result.WriteString("\\r")
-		case '\t':
-			result.WriteString("\\t")
-		case '\x00':
-			result.WriteString("\\0")
-		default:
-			if unicode.IsControl(r) {
-				fmt.Fprintf(&result, "\\u{%x}", r)
-			} else {
-				result.WriteRune(r)
-			}
-		}
-	}
-	result.WriteByte('"')
-	return result.String()
-}
-
-func rustInt(value int64) string {
-	formatted := strconv.FormatInt(value, 10)
-	sign := ""
-	digits := formatted
-	if strings.HasPrefix(digits, "-") {
-		sign = "-"
-		digits = strings.TrimPrefix(digits, "-")
-	}
-	if len(digits) <= 4 {
-		return formatted
-	}
-
-	var result strings.Builder
-	result.WriteString(sign)
-	for i, digit := range digits {
-		if i > 0 && (len(digits)-i)%3 == 0 {
-			result.WriteByte('_')
-		}
-		result.WriteRune(digit)
-	}
-	return result.String()
-}
-
 func (w *writer) validateNames() error {
 	types := make(map[string]string)
 	for _, enum := range w.pkg.Enums {
@@ -136,6 +53,89 @@ func (w *writer) validateNames() error {
 		}
 	}
 	return nil
+}
+
+func rustIdent(name string) string {
+	if _, ok := rustSpecialKeywords[name]; ok {
+		return name + "_"
+	}
+	if _, ok := rustKeywords[name]; ok {
+		return "r#" + name
+	}
+	return name
+}
+
+func matchName(structName, fieldName string) string {
+	return rustIdent(pascal(structName) + pascal(fieldName))
+}
+
+func pascal(name string) string {
+	parts := strings.Split(name, "_")
+	var sb strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		runes := []rune(part)
+		runes[0] = unicode.ToUpper(runes[0])
+		sb.WriteString(string(runes))
+	}
+	if sb.Len() == 0 {
+		return "Value"
+	}
+	return sb.String()
+}
+
+func rustString(value string) string {
+	var sb strings.Builder
+	sb.WriteByte('"')
+	for _, r := range value {
+		switch r {
+		case '\\':
+			sb.WriteString("\\\\")
+		case '"':
+			sb.WriteString("\\\"")
+		case '\n':
+			sb.WriteString("\\n")
+		case '\r':
+			sb.WriteString("\\r")
+		case '\t':
+			sb.WriteString("\\t")
+		case '\x00':
+			sb.WriteString("\\0")
+		default:
+			if unicode.IsControl(r) {
+				fmt.Fprintf(&sb, "\\u{%x}", r)
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+	}
+	sb.WriteByte('"')
+	return sb.String()
+}
+
+func rustInt(value int64) string {
+	formatted := strconv.FormatInt(value, 10)
+	sign := ""
+	digits := formatted
+	if strings.HasPrefix(digits, "-") {
+		sign = "-"
+		digits = strings.TrimPrefix(digits, "-")
+	}
+	if len(digits) <= 4 {
+		return formatted
+	}
+
+	var sb strings.Builder
+	sb.WriteString(sign)
+	for i, digit := range digits {
+		if i > 0 && (len(digits)-i)%3 == 0 {
+			sb.WriteByte('_')
+		}
+		sb.WriteRune(digit)
+	}
+	return sb.String()
 }
 
 func recordTypeName(names map[string]string, mapped, original string) error {

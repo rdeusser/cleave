@@ -49,8 +49,8 @@ func TestResolveCircularImport(t *testing.T) {
 		t.Fatal("expected circular import error")
 	}
 	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "circular") {
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "circular") {
 			found = true
 			break
 		}

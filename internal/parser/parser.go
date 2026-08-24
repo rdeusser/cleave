@@ -17,11 +17,6 @@ type Parser struct {
 	comments []*ast.Comment
 }
 
-type Error struct {
-	Pos     token.Position
-	Message string
-}
-
 func New(file string, src []byte) *Parser {
 	l := lexer.New(file, src)
 	p := &Parser{lex: l}
@@ -60,10 +55,6 @@ func (p *Parser) Parse() (*ast.File, []Error) {
 
 	file.Comments = p.comments
 	return file, p.errors
-}
-
-func (e Error) Error() string {
-	return fmt.Sprintf("%s: %s", e.Pos, e.Message)
 }
 
 func (p *Parser) parsePackageDecl() *ast.PackageDecl {
@@ -482,9 +473,7 @@ func (p *Parser) parseStringLit() *ast.StringLit {
 	return lit
 }
 
-func (p *Parser) parseIdentExpr() *ast.Ident {
-	return p.parseIdent()
-}
+func (p *Parser) parseIdentExpr() *ast.Ident { return p.parseIdent() }
 
 func (p *Parser) parseIdent() *ast.Ident {
 	if p.cur.Type != token.Ident {
@@ -562,3 +551,10 @@ func (p *Parser) synchronize() {
 		p.next()
 	}
 }
+
+type Error struct {
+	Pos     token.Position
+	Message string
+}
+
+func (e Error) Error() string { return fmt.Sprintf("%s: %s", e.Pos, e.Message) }

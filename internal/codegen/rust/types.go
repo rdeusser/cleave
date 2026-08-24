@@ -8,19 +8,6 @@ import (
 	"github.com/rdeusser/cleave/internal/ir"
 )
 
-type matchType struct {
-	name     string
-	dslName  string
-	variants []matchVariant
-}
-
-type matchVariant struct {
-	name      string
-	typ       string
-	fieldType ir.FieldType
-	key       string
-}
-
 func (w *writer) prepareMatches() error {
 	for _, structure := range w.pkg.Structs {
 		for _, field := range structure.Fields {
@@ -97,28 +84,6 @@ func (w *writer) matchVariant(match *matchType, fieldType ir.FieldType) (*matchV
 		}
 	}
 	return nil, fmt.Errorf("no generated variant for Rust type %s", typ)
-}
-
-func matchVariantBase(fieldType ir.FieldType, typ string) string {
-	switch fieldType.Kind {
-	case ir.KindEnum, ir.KindStruct:
-		return pascal(fieldType.Ref)
-	case ir.KindPrimitive:
-		switch fieldType.Primitive {
-		case ir.Bytes:
-			return "Bytes"
-		case ir.String:
-			return "String"
-		default:
-			base := strings.ToUpper(fieldType.Primitive.String())
-			if fieldType.Array.Kind != ir.NotArray {
-				return base + "Array"
-			}
-			return base
-		}
-	default:
-		return pascal(strings.NewReplacer("<", "_", ">", "_", "[", "_", "]", "_", ";", "_").Replace(typ))
-	}
 }
 
 func (w *writer) writeDeclarations() error {
@@ -266,6 +231,41 @@ func (w *writer) rustType(fieldType ir.FieldType, encoding string) (string, erro
 		return rustArrayType(base, fieldType.Array), nil
 	default:
 		return "", fmt.Errorf("unsupported field kind %d", fieldType.Kind)
+	}
+}
+
+type matchType struct {
+	name     string
+	dslName  string
+	variants []matchVariant
+}
+
+type matchVariant struct {
+	name      string
+	typ       string
+	fieldType ir.FieldType
+	key       string
+}
+
+func matchVariantBase(fieldType ir.FieldType, typ string) string {
+	switch fieldType.Kind {
+	case ir.KindEnum, ir.KindStruct:
+		return pascal(fieldType.Ref)
+	case ir.KindPrimitive:
+		switch fieldType.Primitive {
+		case ir.Bytes:
+			return "Bytes"
+		case ir.String:
+			return "String"
+		default:
+			base := strings.ToUpper(fieldType.Primitive.String())
+			if fieldType.Array.Kind != ir.NotArray {
+				return base + "Array"
+			}
+			return base
+		}
+	default:
+		return pascal(strings.NewReplacer("<", "_", ">", "_", "[", "_", "]", "_", ";", "_").Replace(typ))
 	}
 }
 

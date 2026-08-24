@@ -76,12 +76,7 @@ func (w *writer) writeJSONField(field *ir.Field, access, indent string) error {
 	return w.writeJSONValue(field.Type, field.Encoding, access, indent)
 }
 
-func (w *writer) writeJSONValue(
-	fieldType ir.FieldType,
-	encoding,
-	access,
-	indent string,
-) error {
+func (w *writer) writeJSONValue(fieldType ir.FieldType, encoding, access, indent string) error {
 	field := &ir.Field{Type: fieldType, Encoding: encoding}
 	if isTextField(field) {
 		fmt.Fprintf(&w.sb, "%swrite_json_string(&mut json, %s);\n", indent, access)

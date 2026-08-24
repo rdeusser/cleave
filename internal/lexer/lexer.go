@@ -9,9 +9,8 @@ import (
 )
 
 type Lexer struct {
-	src  []byte
-	file string
-
+	src   []byte
+	file  string
 	pos   int // current byte offset
 	start int // start of current token
 	line  int

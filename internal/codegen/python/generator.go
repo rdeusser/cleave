@@ -794,16 +794,16 @@ func fieldTypePythonStr(ft *ir.FieldType) string {
 
 func indentLines(code string, extra string) string {
 	lines := strings.Split(code, "\n")
-	var result strings.Builder
+	var sb strings.Builder
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		result.WriteString(extra)
-		result.WriteString(line)
-		result.WriteByte('\n')
+		sb.WriteString(extra)
+		sb.WriteString(line)
+		sb.WriteByte('\n')
 	}
-	return result.String()
+	return sb.String()
 }
 
 func emitPythonArgs(args []*ir.ExprNode, thisName string) string {

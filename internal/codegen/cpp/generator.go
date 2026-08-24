@@ -371,15 +371,6 @@ func (w *writer) hasCrossRefFields() bool {
 	return false
 }
 
-func structHasCrossRefs(s *ir.Struct) bool {
-	for _, f := range s.Fields {
-		if f.CrossRef != "" {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *writer) variantType(m *ir.MatchSpec) string {
 	seen := make(map[string]bool)
 	var types []string
@@ -1082,6 +1073,15 @@ func (w *writer) lookupEnum(name string) *ir.Enum {
 		}
 	}
 	return nil
+}
+
+func structHasCrossRefs(s *ir.Struct) bool {
+	for _, f := range s.Fields {
+		if f.CrossRef != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func emitCppExpr(expr *ir.ExprNode, thisName string) string {

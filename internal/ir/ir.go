@@ -1,5 +1,27 @@
 package ir
 
+var primitiveNames = [...]string{
+	U8:     "u8",
+	U16:    "u16",
+	U32:    "u32",
+	U64:    "u64",
+	I8:     "i8",
+	I16:    "i16",
+	I32:    "i32",
+	I64:    "i64",
+	F32:    "f32",
+	F64:    "f64",
+	Bytes:  "bytes",
+	String: "string",
+}
+
+var primitiveByName = map[string]PrimitiveType{
+	"u8": U8, "u16": U16, "u32": U32, "u64": U64,
+	"i8": I8, "i16": I16, "i32": I32, "i64": I64,
+	"f32": F32, "f64": F64,
+	"bytes": Bytes, "string": String,
+}
+
 type Package struct {
 	Name    string
 	Format  *Format
@@ -37,6 +59,13 @@ type Field struct {
 	CrossRef    string // [ref = Struct.field] — metadata-only cross-format reference
 }
 
+func (f *Field) EffectiveEndian(structEndian Endian) Endian {
+	if f.Options.Endian != nil {
+		return *f.Options.Endian
+	}
+	return structEndian
+}
+
 type ValidationRule struct {
 	ID         string
 	Message    string
@@ -45,6 +74,24 @@ type ValidationRule struct {
 
 type FieldOptions struct {
 	Endian *Endian
+}
+
+type Union struct {
+	Name        string
+	BackingType PrimitiveType
+	Cases       []MatchCase
+	Default     *FieldType
+}
+
+type MatchSpec struct {
+	TagField string
+	Cases    []MatchCase // valued cases only, never default
+	Default  *FieldType  // nil if no _ case
+}
+
+type MatchCase struct {
+	Value int64
+	Type  FieldType
 }
 
 type FieldType struct {
@@ -83,24 +130,6 @@ const (
 	FixedTerminator           // string[64, terminator = 0x00]
 )
 
-type Union struct {
-	Name        string
-	BackingType PrimitiveType
-	Cases       []MatchCase
-	Default     *FieldType
-}
-
-type MatchSpec struct {
-	TagField string
-	Cases    []MatchCase // valued cases only, never default
-	Default  *FieldType  // nil if no _ case
-}
-
-type MatchCase struct {
-	Value int64
-	Type  FieldType
-}
-
 type Enum struct {
 	Name        string
 	BackingType PrimitiveType
@@ -129,35 +158,12 @@ const (
 	String
 )
 
-type Endian int
-
-const (
-	LittleEndian Endian = iota
-	BigEndian
-)
-
 func LookupPrimitive(name string) (PrimitiveType, bool) {
 	p, ok := primitiveByName[name]
 	return p, ok
 }
 
-func (e Endian) String() string {
-	if e == BigEndian {
-		return "big"
-	}
-	return "little"
-}
-
-func (f *Field) EffectiveEndian(structEndian Endian) Endian {
-	if f.Options.Endian != nil {
-		return *f.Options.Endian
-	}
-	return structEndian
-}
-
-func (p PrimitiveType) String() string {
-	return primitiveNames[p]
-}
+func (p PrimitiveType) String() string { return primitiveNames[p] }
 
 func (p PrimitiveType) Size() int {
 	switch p {
@@ -183,24 +189,16 @@ func (p PrimitiveType) IsInteger() bool {
 	}
 }
 
-var primitiveNames = [...]string{
-	U8:     "u8",
-	U16:    "u16",
-	U32:    "u32",
-	U64:    "u64",
-	I8:     "i8",
-	I16:    "i16",
-	I32:    "i32",
-	I64:    "i64",
-	F32:    "f32",
-	F64:    "f64",
-	Bytes:  "bytes",
-	String: "string",
-}
+type Endian int
 
-var primitiveByName = map[string]PrimitiveType{
-	"u8": U8, "u16": U16, "u32": U32, "u64": U64,
-	"i8": I8, "i16": I16, "i32": I32, "i64": I64,
-	"f32": F32, "f64": F64,
-	"bytes": Bytes, "string": String,
+const (
+	LittleEndian Endian = iota
+	BigEndian
+)
+
+func (e Endian) String() string {
+	if e == BigEndian {
+		return "big"
+	}
+	return "little"
 }

@@ -7,11 +7,6 @@ import (
 	"github.com/rdeusser/cleave/internal/token"
 )
 
-type LowerError struct {
-	Pos     token.Position
-	Message string
-}
-
 func Lower(file *ast.File, posFunc func(token.Pos) token.Position) (*Package, []LowerError) {
 	l := &lowerer{
 		pos:           posFunc,
@@ -22,10 +17,6 @@ func Lower(file *ast.File, posFunc func(token.Pos) token.Position) (*Package, []
 		structEndians: make(map[string]bool),
 	}
 	return l.lower(file)
-}
-
-func (e LowerError) Error() string {
-	return fmt.Sprintf("%s: %s", e.Pos, e.Message)
 }
 
 type lowerer struct {
@@ -794,6 +785,24 @@ func (l *lowerer) errorf(pos token.Pos, format string, args ...any) {
 	l.errors = append(l.errors, LowerError{Pos: p, Message: fmt.Sprintf(format, args...)})
 }
 
+type LowerError struct {
+	Pos     token.Position
+	Message string
+}
+
+func (e LowerError) Error() string { return fmt.Sprintf("%s: %s", e.Pos, e.Message) }
+
+func parseEndian(s string) (Endian, bool) {
+	switch s {
+	case "big":
+		return BigEndian, true
+	case "little":
+		return LittleEndian, true
+	default:
+		return LittleEndian, false
+	}
+}
+
 func fitsInType(val int64, prim PrimitiveType) bool {
 	switch prim {
 	case U8:
@@ -823,15 +832,4 @@ func joinDotted(parts []string) string {
 		result += "." + p
 	}
 	return result
-}
-
-func parseEndian(s string) (Endian, bool) {
-	switch s {
-	case "big":
-		return BigEndian, true
-	case "little":
-		return LittleEndian, true
-	default:
-		return LittleEndian, false
-	}
 }

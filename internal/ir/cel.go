@@ -34,17 +34,6 @@ var (
 	}
 )
 
-type ExprNodeKind int
-
-const (
-	ExprLiteral ExprNodeKind = iota
-	ExprIdent
-	ExprBinary
-	ExprUnary
-	ExprSelect
-	ExprCall
-)
-
 type ExprNode struct {
 	Kind     ExprNodeKind
 	Literal  *LiteralValue
@@ -57,13 +46,6 @@ type ExprNode struct {
 	FuncName string
 	Args     []*ExprNode
 	IsMember bool
-}
-
-type LiteralValue struct {
-	Int   *int64
-	Bool  *bool
-	Str   *string
-	Float *float64
 }
 
 func ParseCELExpr(source string) (*ExprNode, error) {
@@ -86,24 +68,6 @@ func ParseCELExpr(source string) (*ExprNode, error) {
 	}
 
 	return translateExpr(ast.NativeRep().Expr())
-}
-
-func containsThis(expr *ExprNode) bool {
-	if expr == nil {
-		return false
-	}
-	if expr.Kind == ExprIdent && expr.Ident == "this" {
-		return true
-	}
-	if containsThis(expr.Left) || containsThis(expr.Right) || containsThis(expr.Operand) {
-		return true
-	}
-	for _, a := range expr.Args {
-		if containsThis(a) {
-			return true
-		}
-	}
-	return false
 }
 
 func translateCall(e celast.Expr) (*ExprNode, error) {
@@ -217,4 +181,40 @@ func translateLiteral(e celast.Expr) (*ExprNode, error) {
 	}
 
 	return &ExprNode{Kind: ExprLiteral, Literal: lit}, nil
+}
+
+type ExprNodeKind int
+
+const (
+	ExprLiteral ExprNodeKind = iota
+	ExprIdent
+	ExprBinary
+	ExprUnary
+	ExprSelect
+	ExprCall
+)
+
+type LiteralValue struct {
+	Int   *int64
+	Bool  *bool
+	Str   *string
+	Float *float64
+}
+
+func containsThis(expr *ExprNode) bool {
+	if expr == nil {
+		return false
+	}
+	if expr.Kind == ExprIdent && expr.Ident == "this" {
+		return true
+	}
+	if containsThis(expr.Left) || containsThis(expr.Right) || containsThis(expr.Operand) {
+		return true
+	}
+	for _, a := range expr.Args {
+		if containsThis(a) {
+			return true
+		}
+	}
+	return false
 }

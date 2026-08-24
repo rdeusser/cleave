@@ -8,15 +8,8 @@ import (
 	"github.com/rdeusser/cleave/internal/token"
 )
 
-func Format(file *ast.File) string {
-	f := &formatter{
-		comments: file.Comments,
-	}
-	return f.format(file)
-}
-
 type formatter struct {
-	buf      strings.Builder
+	sb       strings.Builder
 	comments []*ast.Comment
 	nextCmt  int // index into comments slice
 }
@@ -28,22 +21,22 @@ func (f *formatter) format(file *ast.File) string {
 	})
 
 	f.emitCommentsBefore(file.Package.Keyword)
-	f.buf.WriteString("package ")
-	f.buf.WriteString(file.Package.Name.Name)
-	f.buf.WriteString(";\n")
+	f.sb.WriteString("package ")
+	f.sb.WriteString(file.Package.Name.Name)
+	f.sb.WriteString(";\n")
 
 	if len(file.Imports) > 0 {
-		f.buf.WriteString("\n")
+		f.sb.WriteString("\n")
 		for _, imp := range file.Imports {
 			f.emitCommentsBefore(imp.Keyword)
-			f.buf.WriteString("import \"")
-			f.buf.WriteString(imp.Path.Value)
-			f.buf.WriteString("\";\n")
+			f.sb.WriteString("import \"")
+			f.sb.WriteString(imp.Path.Value)
+			f.sb.WriteString("\";\n")
 		}
 	}
 
 	for _, decl := range file.Decls {
-		f.buf.WriteString("\n")
+		f.sb.WriteString("\n")
 		switch d := decl.(type) {
 		case *ast.FormatDecl:
 			f.formatFormat(d)
@@ -58,20 +51,20 @@ func (f *formatter) format(file *ast.File) string {
 
 	// Emit any trailing comments.
 	for f.nextCmt < len(f.comments) {
-		f.buf.WriteString("\n")
-		f.buf.WriteString(f.comments[f.nextCmt].Text)
-		f.buf.WriteString("\n")
+		f.sb.WriteString("\n")
+		f.sb.WriteString(f.comments[f.nextCmt].Text)
+		f.sb.WriteString("\n")
 		f.nextCmt++
 	}
 
-	return f.buf.String()
+	return f.sb.String()
 }
 
 func (f *formatter) formatFormat(fd *ast.FormatDecl) {
 	f.emitCommentsBefore(fd.Keyword)
-	f.buf.WriteString("format ")
-	f.buf.WriteString(fd.Name.Name)
-	f.buf.WriteString(" {\n")
+	f.sb.WriteString("format ")
+	f.sb.WriteString(fd.Name.Name)
+	f.sb.WriteString(" {\n")
 
 	// Column-align keys and values.
 	maxKey := 0
@@ -83,28 +76,28 @@ func (f *formatter) formatFormat(fd *ast.FormatDecl) {
 
 	for _, kv := range fd.Entries {
 		f.emitCommentsBefore(kv.Key.Span.Start)
-		f.buf.WriteString("    ")
-		f.buf.WriteString(kv.Key.Name)
-		f.buf.WriteString(strings.Repeat(" ", maxKey-len(kv.Key.Name)))
-		f.buf.WriteString(" = ")
+		f.sb.WriteString("    ")
+		f.sb.WriteString(kv.Key.Name)
+		f.sb.WriteString(strings.Repeat(" ", maxKey-len(kv.Key.Name)))
+		f.sb.WriteString(" = ")
 		f.writeExpr(kv.Value)
-		f.buf.WriteString(";\n")
+		f.sb.WriteString(";\n")
 	}
 
 	f.emitCommentsBefore(fd.RBrace)
-	f.buf.WriteString("}\n")
+	f.sb.WriteString("}\n")
 }
 
 func (f *formatter) formatUnion(u *ast.UnionDecl) {
 	f.emitCommentsBefore(u.Keyword)
-	f.buf.WriteString("union ")
-	f.buf.WriteString(u.Name.Name)
-	f.buf.WriteString(" : ")
-	f.buf.WriteString(u.BackingType.Name.Name)
-	f.buf.WriteString(" {\n")
+	f.sb.WriteString("union ")
+	f.sb.WriteString(u.Name.Name)
+	f.sb.WriteString(" : ")
+	f.sb.WriteString(u.BackingType.Name.Name)
+	f.sb.WriteString(" {\n")
 	f.formatCases(u.Cases, "    ")
 	f.emitCommentsBefore(u.RBrace)
-	f.buf.WriteString("}\n")
+	f.sb.WriteString("}\n")
 }
 
 func (f *formatter) formatCases(cases []*ast.UnionCase, indent string) {
@@ -119,22 +112,22 @@ func (f *formatter) formatCases(cases []*ast.UnionCase, indent string) {
 	for _, c := range cases {
 		f.emitCommentsBefore(c.Arrow)
 		vs := caseValueStr(c.Value)
-		f.buf.WriteString(indent)
-		f.buf.WriteString(vs)
-		f.buf.WriteString(strings.Repeat(" ", maxVal-len(vs)))
-		f.buf.WriteString(" => ")
-		f.buf.WriteString(typeStr(c.Type))
-		f.buf.WriteString(";\n")
+		f.sb.WriteString(indent)
+		f.sb.WriteString(vs)
+		f.sb.WriteString(strings.Repeat(" ", maxVal-len(vs)))
+		f.sb.WriteString(" => ")
+		f.sb.WriteString(typeStr(c.Type))
+		f.sb.WriteString(";\n")
 	}
 }
 
 func (f *formatter) formatEnum(e *ast.EnumDecl) {
 	f.emitCommentsBefore(e.Keyword)
-	f.buf.WriteString("enum ")
-	f.buf.WriteString(e.Name.Name)
-	f.buf.WriteString(" : ")
-	f.buf.WriteString(e.BackingType.Name.Name)
-	f.buf.WriteString(" {\n")
+	f.sb.WriteString("enum ")
+	f.sb.WriteString(e.Name.Name)
+	f.sb.WriteString(" : ")
+	f.sb.WriteString(e.BackingType.Name.Name)
+	f.sb.WriteString(" {\n")
 
 	// Column-align variant names and values.
 	maxName := 0
@@ -146,23 +139,23 @@ func (f *formatter) formatEnum(e *ast.EnumDecl) {
 
 	for _, v := range e.Variants {
 		f.emitCommentsBefore(v.Name.Span.Start)
-		f.buf.WriteString("    ")
-		f.buf.WriteString(v.Name.Name)
-		f.buf.WriteString(strings.Repeat(" ", maxName-len(v.Name.Name)))
-		f.buf.WriteString(" = ")
+		f.sb.WriteString("    ")
+		f.sb.WriteString(v.Name.Name)
+		f.sb.WriteString(strings.Repeat(" ", maxName-len(v.Name.Name)))
+		f.sb.WriteString(" = ")
 		f.writeExpr(v.Value)
-		f.buf.WriteString(";\n")
+		f.sb.WriteString(";\n")
 	}
 
 	f.emitCommentsBefore(e.RBrace)
-	f.buf.WriteString("}\n")
+	f.sb.WriteString("}\n")
 }
 
 func (f *formatter) formatStruct(s *ast.StructDecl) {
 	f.emitCommentsBefore(s.Keyword)
-	f.buf.WriteString("struct ")
-	f.buf.WriteString(s.Name.Name)
-	f.buf.WriteString(" {\n")
+	f.sb.WriteString("struct ")
+	f.sb.WriteString(s.Name.Name)
+	f.sb.WriteString(" {\n")
 
 	// Compute column widths for name and type alignment (regular fields only).
 	maxFieldName := 0
@@ -185,58 +178,58 @@ func (f *formatter) formatStruct(s *ast.StructDecl) {
 
 	for _, field := range s.Fields {
 		f.emitCommentsBefore(field.Name.Span.Start)
-		f.buf.WriteString("    ")
-		f.buf.WriteString(field.Name.Name)
+		f.sb.WriteString("    ")
+		f.sb.WriteString(field.Name.Name)
 
 		if field.Match != nil {
-			f.buf.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
-			f.buf.WriteString("  match ")
-			f.buf.WriteString(field.Match.Tag.Name)
-			f.buf.WriteString(" {\n")
+			f.sb.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
+			f.sb.WriteString("  match ")
+			f.sb.WriteString(field.Match.Tag.Name)
+			f.sb.WriteString(" {\n")
 			f.formatCases(field.Match.Cases, "        ")
-			f.buf.WriteString("    };\n")
+			f.sb.WriteString("    };\n")
 			continue
 		}
 
-		f.buf.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
-		f.buf.WriteString("  ")
+		f.sb.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
+		f.sb.WriteString("  ")
 		ts := typeStr(field.Type)
-		f.buf.WriteString(ts)
+		f.sb.WriteString(ts)
 
 		if len(field.Options) > 0 {
-			f.buf.WriteString(strings.Repeat(" ", maxTypeStr-len(ts)))
-			f.buf.WriteString(" ")
+			f.sb.WriteString(strings.Repeat(" ", maxTypeStr-len(ts)))
+			f.sb.WriteString(" ")
 			f.writeFieldOptions(field.Options)
 		}
 
-		f.buf.WriteString(";\n")
+		f.sb.WriteString(";\n")
 	}
 
 	for _, opt := range s.Options {
-		f.buf.WriteString("\n")
+		f.sb.WriteString("\n")
 		f.formatOptionBlock(opt)
 	}
 
 	f.emitCommentsBefore(s.RBrace)
-	f.buf.WriteString("}\n")
+	f.sb.WriteString("}\n")
 }
 
 func (f *formatter) formatOptionBlock(ob *ast.OptionBlock) {
 	f.emitCommentsBefore(ob.Keyword)
-	f.buf.WriteString("    option (")
-	f.buf.WriteString(ob.Namespace.Name)
-	f.buf.WriteString(") = {\n")
+	f.sb.WriteString("    option (")
+	f.sb.WriteString(ob.Namespace.Name)
+	f.sb.WriteString(") = {\n")
 
 	for _, kv := range ob.Entries {
 		f.emitCommentsBefore(kv.Key.Span.Start)
-		f.buf.WriteString("        ")
-		f.buf.WriteString(kv.Key.Name)
-		f.buf.WriteString(" = ")
+		f.sb.WriteString("        ")
+		f.sb.WriteString(kv.Key.Name)
+		f.sb.WriteString(" = ")
 		f.writeExpr(kv.Value)
-		f.buf.WriteString(";\n")
+		f.sb.WriteString(";\n")
 	}
 
-	f.buf.WriteString("    };\n")
+	f.sb.WriteString("    };\n")
 }
 
 func (f *formatter) hasBlockOptions(opts []*ast.FieldOption) bool {
@@ -253,89 +246,94 @@ func (f *formatter) hasBlockOptions(opts []*ast.FieldOption) bool {
 
 func (f *formatter) writeFieldOptionKey(opt *ast.FieldOption) {
 	if opt.Namespace != nil {
-		f.buf.WriteString("(")
-		f.buf.WriteString(opt.Namespace.Name)
-		f.buf.WriteString(").")
+		f.sb.WriteString("(")
+		f.sb.WriteString(opt.Namespace.Name)
+		f.sb.WriteString(").")
 	}
-	f.buf.WriteString(opt.Key.Name)
+	f.sb.WriteString(opt.Key.Name)
 }
 
 func (f *formatter) writeFieldOptions(opts []*ast.FieldOption) {
 	if f.hasBlockOptions(opts) {
-		f.buf.WriteString("[\n")
+		f.sb.WriteString("[\n")
 		for i, opt := range opts {
-			f.buf.WriteString("        ")
+			f.sb.WriteString("        ")
 			f.writeFieldOptionKey(opt)
-			f.buf.WriteString(" = ")
+			f.sb.WriteString(" = ")
 			f.writeExprIndented(opt.Value, "        ")
 			if i < len(opts)-1 {
-				f.buf.WriteString(",")
+				f.sb.WriteString(",")
 			}
-			f.buf.WriteString("\n")
+			f.sb.WriteString("\n")
 		}
-		f.buf.WriteString("    ]")
+		f.sb.WriteString("    ]")
 	} else {
-		f.buf.WriteString("[")
+		f.sb.WriteString("[")
 		for i, opt := range opts {
 			if i > 0 {
-				f.buf.WriteString(", ")
+				f.sb.WriteString(", ")
 			}
 			f.writeFieldOptionKey(opt)
-			f.buf.WriteString(" = ")
+			f.sb.WriteString(" = ")
 			f.writeExpr(opt.Value)
 		}
-		f.buf.WriteString("]")
+		f.sb.WriteString("]")
 	}
 }
 
-func (f *formatter) writeExpr(expr ast.Expr) {
-	f.writeExprIndented(expr, "")
-}
+func (f *formatter) writeExpr(expr ast.Expr) { f.writeExprIndented(expr, "") }
 
 func (f *formatter) writeExprIndented(expr ast.Expr, indent string) {
 	switch e := expr.(type) {
 	case *ast.IntegerLit:
-		f.buf.WriteString(e.Raw)
+		f.sb.WriteString(e.Raw)
 	case *ast.StringLit:
-		f.buf.WriteString("\"")
-		f.buf.WriteString(e.Value)
-		f.buf.WriteString("\"")
+		f.sb.WriteString("\"")
+		f.sb.WriteString(e.Value)
+		f.sb.WriteString("\"")
 	case *ast.Ident:
-		f.buf.WriteString(e.Name)
+		f.sb.WriteString(e.Name)
 	case *ast.DottedIdent:
 		for i, part := range e.Parts {
 			if i > 0 {
-				f.buf.WriteString(".")
+				f.sb.WriteString(".")
 			}
-			f.buf.WriteString(part.Name)
+			f.sb.WriteString(part.Name)
 		}
 	case *ast.BoolLit:
 		if e.Value {
-			f.buf.WriteString("true")
+			f.sb.WriteString("true")
 		} else {
-			f.buf.WriteString("false")
+			f.sb.WriteString("false")
 		}
 	case *ast.BlockExpr:
-		f.buf.WriteString("{\n")
+		f.sb.WriteString("{\n")
 		for _, entry := range e.Entries {
-			f.buf.WriteString(indent)
-			f.buf.WriteString("    ")
-			f.buf.WriteString(entry.Key.Name)
-			f.buf.WriteString(": ")
+			f.sb.WriteString(indent)
+			f.sb.WriteString("    ")
+			f.sb.WriteString(entry.Key.Name)
+			f.sb.WriteString(": ")
 			f.writeExprIndented(entry.Value, indent+"    ")
-			f.buf.WriteString("\n")
+			f.sb.WriteString("\n")
 		}
-		f.buf.WriteString(indent)
-		f.buf.WriteString("}")
+		f.sb.WriteString(indent)
+		f.sb.WriteString("}")
 	}
 }
 
 func (f *formatter) emitCommentsBefore(pos token.Pos) {
 	for f.nextCmt < len(f.comments) && f.comments[f.nextCmt].Span.Start < pos {
-		f.buf.WriteString(f.comments[f.nextCmt].Text)
-		f.buf.WriteString("\n")
+		f.sb.WriteString(f.comments[f.nextCmt].Text)
+		f.sb.WriteString("\n")
 		f.nextCmt++
 	}
+}
+
+func Format(file *ast.File) string {
+	f := &formatter{
+		comments: file.Comments,
+	}
+	return f.format(file)
 }
 
 func caseValueStr(expr ast.Expr) string {
@@ -354,51 +352,51 @@ func typeStr(te *ast.TypeExpr) string {
 	if te.Dim == nil {
 		return name
 	}
-	var b strings.Builder
-	b.WriteString(name)
-	b.WriteString("[")
+	var sb strings.Builder
+	sb.WriteString(name)
+	sb.WriteString("[")
 	switch d := te.Dim.(type) {
 	case *ast.IntegerLit:
-		b.WriteString(d.Raw)
+		sb.WriteString(d.Raw)
 	case *ast.Ident:
-		b.WriteString(d.Name)
+		sb.WriteString(d.Name)
 	}
 	for _, opt := range te.InlineOptions {
-		b.WriteString(", ")
-		b.WriteString(opt.Key.Name)
-		b.WriteString(" = ")
-		writeExprToBuilder(&b, opt.Value)
+		sb.WriteString(", ")
+		sb.WriteString(opt.Key.Name)
+		sb.WriteString(" = ")
+		writeExprToBuilder(&sb, opt.Value)
 	}
-	b.WriteString("]")
-	return b.String()
+	sb.WriteString("]")
+	return sb.String()
 }
 
-func writeExprToBuilder(b *strings.Builder, expr ast.Expr) {
+func writeExprToBuilder(sb *strings.Builder, expr ast.Expr) {
 	switch e := expr.(type) {
 	case *ast.IntegerLit:
-		b.WriteString(e.Raw)
+		sb.WriteString(e.Raw)
 	case *ast.StringLit:
-		b.WriteString("\"")
-		b.WriteString(e.Value)
-		b.WriteString("\"")
+		sb.WriteString("\"")
+		sb.WriteString(e.Value)
+		sb.WriteString("\"")
 	case *ast.Ident:
-		b.WriteString(e.Name)
+		sb.WriteString(e.Name)
 	case *ast.BoolLit:
 		if e.Value {
-			b.WriteString("true")
+			sb.WriteString("true")
 		} else {
-			b.WriteString("false")
+			sb.WriteString("false")
 		}
 	case *ast.BlockExpr:
-		b.WriteString("{ ")
+		sb.WriteString("{ ")
 		for i, entry := range e.Entries {
 			if i > 0 {
-				b.WriteString(" ")
+				sb.WriteString(" ")
 			}
-			b.WriteString(entry.Key.Name)
-			b.WriteString(": ")
-			writeExprToBuilder(b, entry.Value)
+			sb.WriteString(entry.Key.Name)
+			sb.WriteString(": ")
+			writeExprToBuilder(sb, entry.Value)
 		}
-		b.WriteString(" }")
+		sb.WriteString(" }")
 	}
 }
