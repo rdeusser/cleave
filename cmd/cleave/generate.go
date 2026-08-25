@@ -24,11 +24,9 @@ func (cmd *GenerateCmd) Run() error {
 		return errors.New("--no-cargo requires --lang rust")
 	}
 
-	pkg, _, errs := compileFile(cmd.File)
-	if len(errs) > 0 {
-		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, e)
-		}
+	pkg, _, err := compileFile(cmd.File)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 

@@ -10,11 +10,9 @@ type ParseCmd struct {
 }
 
 func (cmd *ParseCmd) Run() error {
-	_, _, errs := compileFile(cmd.File)
-	if len(errs) > 0 {
-		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, e)
-		}
+	_, _, err := compileFile(cmd.File)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	return nil

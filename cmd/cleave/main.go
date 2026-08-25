@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/alecthomas/kong"
 
 	"github.com/rdeusser/cleave/internal/ir"
@@ -53,20 +55,20 @@ Examples:
 	ctx.FatalIfErrorf(ctx.Run())
 }
 
-func compileFile(path string) (*ir.Package, []byte, []string) {
+func compileFile(path string) (*ir.Package, []byte, error) {
 	file, src, err := resolver.Resolve(path)
 	if err != nil {
-		return nil, src, []string{err.Error()}
+		return nil, src, err
 	}
 
 	lex := lexer.New(path, src)
 	pkg, lowerErrs := ir.Lower(file, lex.Position)
-	var errs []string
-	for _, e := range lowerErrs {
-		errs = append(errs, e.Error())
-	}
-	if len(errs) > 0 {
-		return nil, src, errs
+	if len(lowerErrs) > 0 {
+		errs := make([]error, len(lowerErrs))
+		for i, e := range lowerErrs {
+			errs[i] = e
+		}
+		return nil, src, errors.Join(errs...)
 	}
 
 	return pkg, src, nil
