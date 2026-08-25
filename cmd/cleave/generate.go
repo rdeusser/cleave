@@ -26,8 +26,7 @@ func (cmd *GenerateCmd) Run() error {
 
 	pkg, _, err := compileFile(cmd.File)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return err
 	}
 
 	var gen codegen.Generator

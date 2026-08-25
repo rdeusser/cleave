@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -22,18 +23,18 @@ func (cmd *FmtCmd) Run() error {
 	p := parser.New(cmd.File, src)
 	ast, parseErrs := p.Parse()
 	if len(parseErrs) > 0 {
-		for _, e := range parseErrs {
-			fmt.Fprintln(os.Stderr, e)
+		errs := make([]error, len(parseErrs))
+		for i, e := range parseErrs {
+			errs[i] = e
 		}
-		os.Exit(1)
+		return errors.Join(errs...)
 	}
 
 	formatted := format.Format(ast)
 
 	if cmd.Check {
 		if string(src) != formatted {
-			fmt.Fprintf(os.Stderr, "%s: not formatted\n", cmd.File)
-			os.Exit(1)
+			return fmt.Errorf("%s: not formatted", cmd.File)
 		}
 		return nil
 	}
