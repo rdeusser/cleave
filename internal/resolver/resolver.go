@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rdeusser/cleave/internal/ast"
 	"github.com/rdeusser/cleave/internal/parser"
@@ -133,10 +134,10 @@ func Resolve(entryPath string) (*ast.File, []byte, []error) {
 }
 
 func formatCycle(stack []string, target string) string {
-	result := ""
+	var sb strings.Builder
 	for _, s := range stack {
-		result += filepath.Base(s) + " -> "
+		sb.WriteString(filepath.Base(s) + " -> ")
 	}
-	result += filepath.Base(target)
-	return result
+	sb.WriteString(filepath.Base(target))
+	return sb.String()
 }

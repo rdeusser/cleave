@@ -3,6 +3,7 @@ package ir
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 
 	"cel.dev/cel-go/cel"
@@ -211,10 +212,5 @@ func containsThis(expr *ExprNode) bool {
 	if containsThis(expr.Left) || containsThis(expr.Right) || containsThis(expr.Operand) {
 		return true
 	}
-	for _, a := range expr.Args {
-		if containsThis(a) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(expr.Args, containsThis)
 }

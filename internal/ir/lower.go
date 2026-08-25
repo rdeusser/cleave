@@ -2,6 +2,7 @@ package ir
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rdeusser/cleave/internal/ast"
 	"github.com/rdeusser/cleave/internal/token"
@@ -827,9 +828,10 @@ func fitsInType(val int64, prim PrimitiveType) bool {
 }
 
 func joinDotted(parts []string) string {
-	result := parts[0]
+	var sb strings.Builder
+	sb.WriteString(parts[0])
 	for _, p := range parts[1:] {
-		result += "." + p
+		sb.WriteString("." + p)
 	}
-	return result
+	return sb.String()
 }

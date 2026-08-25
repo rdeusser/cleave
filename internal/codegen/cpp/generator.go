@@ -177,7 +177,7 @@ func (w *writer) writeStructSource(s *ir.Struct) {
 			readCode := w.sb.String()
 			w.sb = orig
 
-			for _, line := range strings.Split(readCode, "\n") {
+			for line := range strings.SplitSeq(readCode, "\n") {
 				if line == "" {
 					continue
 				}
@@ -677,7 +677,7 @@ func (w *writer) writeToBytesSource(s *ir.Struct) {
 			writeCode := w.sb.String()
 			w.sb = orig
 
-			for _, line := range strings.Split(writeCode, "\n") {
+			for line := range strings.SplitSeq(writeCode, "\n") {
 				if line == "" {
 					continue
 				}
