@@ -11,9 +11,9 @@ import (
 
 func TestResolveBasicImport(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "import", "main.clv")
-	file, _, errs := Resolve(path)
-	if len(errs) > 0 {
-		t.Fatalf("unexpected errors: %v", errs)
+	file, _, err := Resolve(path)
+	if err != nil {
+		t.Fatalf("unexpected errors: %v", err)
 	}
 	if file.Package.Name.Name != "sox" {
 		t.Errorf("package name: got %q, want %q", file.Package.Name.Name, "sox")
@@ -44,26 +44,19 @@ func TestResolveBasicImport(t *testing.T) {
 
 func TestResolveCircularImport(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "errors", "circular_import.clv")
-	_, _, errs := Resolve(path)
-	if len(errs) == 0 {
+	_, _, err := Resolve(path)
+	if err == nil {
 		t.Fatal("expected circular import error")
 	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "circular") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected circular import error, got: %v", errs)
+	if !strings.Contains(err.Error(), "circular") {
+		t.Errorf("expected circular import error, got: %v", err)
 	}
 }
 
 func TestResolveMissingImport(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "errors", "missing_import.clv")
-	_, _, errs := Resolve(path)
-	if len(errs) == 0 {
+	_, _, err := Resolve(path)
+	if err == nil {
 		t.Fatal("expected missing import error")
 	}
 }
@@ -107,9 +100,9 @@ struct Root {
 }
 `)
 
-	file, _, errs := Resolve(filepath.Join(dir, "main.clv"))
-	if len(errs) > 0 {
-		t.Fatalf("unexpected errors: %v", errs)
+	file, _, err := Resolve(filepath.Join(dir, "main.clv"))
+	if err != nil {
+		t.Fatalf("unexpected errors: %v", err)
 	}
 
 	// Root should be in Decls (entry file's own).
@@ -149,9 +142,9 @@ struct Foo {
     x u32;
 }
 `)
-	file, _, errs := Resolve(filepath.Join(dir, "simple.clv"))
-	if len(errs) > 0 {
-		t.Fatalf("unexpected errors: %v", errs)
+	file, _, err := Resolve(filepath.Join(dir, "simple.clv"))
+	if err != nil {
+		t.Fatalf("unexpected errors: %v", err)
 	}
 	if file.Package.Name.Name != "simple" {
 		t.Errorf("package name: got %q, want %q", file.Package.Name.Name, "simple")

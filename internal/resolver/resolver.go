@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,7 +101,7 @@ func (r *resolver) collectAllDecls(absPath string, visited map[string]bool, out 
 	*out = append(*out, file.Decls...)
 }
 
-func Resolve(entryPath string) (*ast.File, []byte, []error) {
+func Resolve(entryPath string) (*ast.File, []byte, error) {
 	r := &resolver{
 		parsed:    make(map[string]*ast.File),
 		resolving: make(map[string]bool),
@@ -108,12 +109,12 @@ func Resolve(entryPath string) (*ast.File, []byte, []error) {
 
 	absPath, err := filepath.Abs(entryPath)
 	if err != nil {
-		return nil, nil, []error{fmt.Errorf("cannot resolve path %s: %w", entryPath, err)}
+		return nil, nil, fmt.Errorf("cannot resolve path %s: %w", entryPath, err)
 	}
 
 	data, errs := r.resolveAll(absPath, nil)
 	if len(errs) > 0 {
-		return nil, data, errs
+		return nil, data, errors.Join(errs...)
 	}
 
 	// Collect imported declarations (for type lookup) separately from entry declarations.

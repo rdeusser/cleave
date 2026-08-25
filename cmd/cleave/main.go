@@ -54,13 +54,9 @@ Examples:
 }
 
 func compileFile(path string) (*ir.Package, []byte, []string) {
-	file, src, resolveErrs := resolver.Resolve(path)
-	if len(resolveErrs) > 0 {
-		var errs []string
-		for _, err := range resolveErrs {
-			errs = append(errs, err.Error())
-		}
-		return nil, src, errs
+	file, src, err := resolver.Resolve(path)
+	if err != nil {
+		return nil, src, []string{err.Error()}
 	}
 
 	lex := lexer.New(path, src)
