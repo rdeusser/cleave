@@ -2,9 +2,11 @@ package parser
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rdeusser/cleave/internal/ast"
+	"github.com/rdeusser/cleave/internal/token"
 )
 
 func TestParsePackageDecl(t *testing.T) {
@@ -171,6 +173,12 @@ struct Data {
 	if !boolVal.Value {
 		t.Error("expected rest = true")
 	}
+	if want := token.Pos(strings.Index(src, "[rest")); f0.LBracket != want {
+		t.Errorf("opening bracket offset: got %d, want %d", f0.LBracket, want)
+	}
+	if want := token.Pos(strings.Index(src, "true]") + len("true")); f0.RBracket != want {
+		t.Errorf("closing bracket offset: got %d, want %d", f0.RBracket, want)
+	}
 
 	// name string [terminator = 0x00]
 	f1 := s.Fields[1]
@@ -240,18 +248,32 @@ func TestParseErrors(t *testing.T) {
 	tests := []struct {
 		name string
 		src  string
+		want string // the first error
 	}{
-		{"missing package", "struct Foo { x u32; }"},
-		{"missing semicolon", "package test; struct Foo { x u32 }"},
-		{"missing brace", "package test; struct Foo { x u32;"},
+		{"missing package", "struct Foo { x u32; }", "test.clv:1:1: expected package declaration"},
+		{"missing semicolon", "package test; struct Foo { x u32 }", "test.clv:1:34: expected ;, got }"},
+		{"missing brace", "package test; struct Foo { x u32;", "test.clv:1:34: expected }, got EOF"},
+
+		// Each input below stops a loop at a token that the loop cannot parse.
+		// The parser must skip that token to terminate.
+		{"stray closing brace", "package test; }", "test.clv:1:15: expected declaration, got }"},
+		{"import after a declaration", `package test; struct Foo {} import "a.clv";`, "test.clv:1:29: expected declaration, got import"},
+		{"declaration keyword in a struct", "package test; struct Foo { struct Bar {} }", "test.clv:1:28: expected field or option declaration, got struct"},
+		{"declaration keyword in an enum", `package test; enum E : u8 { import "a.clv"; }`, "test.clv:1:29: expected enum variant, got import"},
+		{"unexpected token in a format block", "package test; format F { ) }", "test.clv:1:26: expected identifier, got )"},
+		{"unexpected token in an option block", "package test; struct Foo { option (builtin) = { ) }; }", "test.clv:1:49: expected identifier, got )"},
+		{"unexpected token in a block value", "package test; struct Foo { x u8 [(builtin).cel = { ) }]; }", "test.clv:1:52: expected identifier, got )"},
+		{"unclosed field option list", "package test; struct Foo { x u8 [rest = true; }", "test.clv:1:45: expected identifier, got ;"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := New("test.clv", []byte(tt.src))
-			_, errs := p.Parse()
+			_, errs := New("test.clv", []byte(tt.src)).Parse()
 			if len(errs) == 0 {
-				t.Error("expected parse errors")
+				t.Fatalf("Parse() on %q returned no errors, want %q first", tt.src, tt.want)
+			}
+			if got := errs[0].Error(); got != tt.want {
+				t.Errorf("Parse() on %q first error = %q, want %q", tt.src, got, tt.want)
 			}
 		})
 	}

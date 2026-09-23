@@ -1,402 +1,150 @@
+// Package format prints cleave source in its canonical style.
+//
+// The style indents with four spaces and puts each declaration, field, variant,
+// case, and entry on its own line. Consecutive lines align their columns (field
+// names, types, and option lists, and the keys of variants, cases, and entries).
+// Trailing comments in a run of such lines start in one column. A blank line
+// or a line that opens a block ends the run. A comment line does not.
+//
+// Comments stay where the source puts them: above a line, at the end of a line,
+// after an opening brace or bracket, or before a closing one. A comment inside
+// a construct that prints on one line, such as a type, moves to its own line
+// above that construct. Continuation lines of a block comment print unchanged.
+//
+// A field's option list stays on the field's line when it holds no block value
+// and no comment, and the line fits in 100 columns before alignment padding.
+// Otherwise each option gets its own line. Block values print one entry per
+// line, except inside the brackets of a type.
+//
+// One blank line separates top-level declarations and sets struct option blocks
+// apart from fields. Elsewhere one blank line appears wherever the source has
+// one or more.
 package format
 
 import (
-	"sort"
+	"bytes"
+	"errors"
+	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rdeusser/cleave/internal/ast"
+	"github.com/rdeusser/cleave/internal/parser"
 	"github.com/rdeusser/cleave/internal/token"
 )
 
-type formatter struct {
-	sb       strings.Builder
-	comments []*ast.Comment
-	nextCmt  int // index into comments slice
+// indentUnit is one level of indentation.
+const indentUnit = "    "
+
+// maxWidth limits the width of a field printed with its options on one line.
+// The width leaves out alignment padding. The padding depends on which rows
+// share the field's alignment section, and that depends on whether the field's
+// option list breaks.
+const maxWidth = 100
+
+// Source parses src and returns it in the canonical style. filename labels
+// the positions in parse errors. If src does not parse, Source returns the
+// parse errors joined and no output.
+func Source(filename string, src []byte) ([]byte, error) {
+	file, parseErrs := parser.New(filename, src).Parse()
+	if len(parseErrs) > 0 {
+		errs := make([]error, len(parseErrs))
+		for i, e := range parseErrs {
+			errs[i] = e
+		}
+		return nil, errors.Join(errs...)
+	}
+
+	p := newPrinter(src, file.Comments)
+	lines := p.file(file, token.Pos(len(src)))
+	if i := slices.Index(p.isPlaced, false); i >= 0 {
+		panic(fmt.Sprintf("format: comment at offset %d was not printed", p.comments[i].Span.Start))
+	}
+
+	var buf bytes.Buffer
+	for _, l := range lines {
+		buf.WriteString(l.text)
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes(), nil
 }
 
-func (f *formatter) format(file *ast.File) string {
-	// Sort comments by position.
-	sort.Slice(f.comments, func(i, j int) bool {
-		return f.comments[i].Span.Start < f.comments[j].Span.Start
-	})
-
-	f.emitCommentsBefore(file.Package.Keyword)
-	f.sb.WriteString("package ")
-	f.sb.WriteString(file.Package.Name.Name)
-	f.sb.WriteString(";\n")
-
-	if len(file.Imports) > 0 {
-		f.sb.WriteString("\n")
-		for _, imp := range file.Imports {
-			f.emitCommentsBefore(imp.Keyword)
-			f.sb.WriteString("import \"")
-			f.sb.WriteString(imp.Path.Value)
-			f.sb.WriteString("\";\n")
-		}
+// cases lays out union or match cases, one "value => type;" per line.
+func cases(cs []*ast.UnionCase) []item {
+	items := make([]item, len(cs))
+	for i, c := range cs {
+		items[i] = item{span: ast.SpanOf(c), cells: []string{valueString(c.Value), "=> " + typeString(c.Type) + ";"}}
 	}
-
-	for _, decl := range file.Decls {
-		f.sb.WriteString("\n")
-		switch d := decl.(type) {
-		case *ast.FormatDecl:
-			f.formatFormat(d)
-		case *ast.UnionDecl:
-			f.formatUnion(d)
-		case *ast.EnumDecl:
-			f.formatEnum(d)
-		case *ast.StructDecl:
-			f.formatStruct(d)
-		}
-	}
-
-	// Emit any trailing comments.
-	for f.nextCmt < len(f.comments) {
-		f.sb.WriteString("\n")
-		f.sb.WriteString(f.comments[f.nextCmt].Text)
-		f.sb.WriteString("\n")
-		f.nextCmt++
-	}
-
-	return f.sb.String()
+	return items
 }
 
-func (f *formatter) formatFormat(fd *ast.FormatDecl) {
-	f.emitCommentsBefore(fd.Keyword)
-	f.sb.WriteString("format ")
-	f.sb.WriteString(fd.Name.Name)
-	f.sb.WriteString(" {\n")
-
-	// Column-align keys and values.
-	maxKey := 0
-	for _, kv := range fd.Entries {
-		if len(kv.Key.Name) > maxKey {
-			maxKey = len(kv.Key.Name)
-		}
+// typeString prints a type with its dimension and inline options, as in
+// string[64, terminator = 0x00].
+func typeString(t *ast.TypeExpr) string {
+	if t.Dim == nil {
+		return t.Name.Name
 	}
-
-	for _, kv := range fd.Entries {
-		f.emitCommentsBefore(kv.Key.Span.Start)
-		f.sb.WriteString("    ")
-		f.sb.WriteString(kv.Key.Name)
-		f.sb.WriteString(strings.Repeat(" ", maxKey-len(kv.Key.Name)))
-		f.sb.WriteString(" = ")
-		f.writeExpr(kv.Value)
-		f.sb.WriteString(";\n")
+	s := t.Name.Name + "[" + valueString(t.Dim)
+	for _, o := range t.InlineOptions {
+		s += ", " + optionKey(o) + " = " + valueString(o.Value)
 	}
-
-	f.emitCommentsBefore(fd.RBrace)
-	f.sb.WriteString("}\n")
+	return s + "]"
 }
 
-func (f *formatter) formatUnion(u *ast.UnionDecl) {
-	f.emitCommentsBefore(u.Keyword)
-	f.sb.WriteString("union ")
-	f.sb.WriteString(u.Name.Name)
-	f.sb.WriteString(" : ")
-	f.sb.WriteString(u.BackingType.Name.Name)
-	f.sb.WriteString(" {\n")
-	f.formatCases(u.Cases, "    ")
-	f.emitCommentsBefore(u.RBrace)
-	f.sb.WriteString("}\n")
-}
-
-func (f *formatter) formatCases(cases []*ast.UnionCase, indent string) {
-	maxVal := 0
-	for _, c := range cases {
-		vs := caseValueStr(c.Value)
-		if len(vs) > maxVal {
-			maxVal = len(vs)
-		}
-	}
-
-	for _, c := range cases {
-		f.emitCommentsBefore(c.Arrow)
-		vs := caseValueStr(c.Value)
-		f.sb.WriteString(indent)
-		f.sb.WriteString(vs)
-		f.sb.WriteString(strings.Repeat(" ", maxVal-len(vs)))
-		f.sb.WriteString(" => ")
-		f.sb.WriteString(typeStr(c.Type))
-		f.sb.WriteString(";\n")
-	}
-}
-
-func (f *formatter) formatEnum(e *ast.EnumDecl) {
-	f.emitCommentsBefore(e.Keyword)
-	f.sb.WriteString("enum ")
-	f.sb.WriteString(e.Name.Name)
-	f.sb.WriteString(" : ")
-	f.sb.WriteString(e.BackingType.Name.Name)
-	f.sb.WriteString(" {\n")
-
-	// Column-align variant names and values.
-	maxName := 0
-	for _, v := range e.Variants {
-		if len(v.Name.Name) > maxName {
-			maxName = len(v.Name.Name)
-		}
-	}
-
-	for _, v := range e.Variants {
-		f.emitCommentsBefore(v.Name.Span.Start)
-		f.sb.WriteString("    ")
-		f.sb.WriteString(v.Name.Name)
-		f.sb.WriteString(strings.Repeat(" ", maxName-len(v.Name.Name)))
-		f.sb.WriteString(" = ")
-		f.writeExpr(v.Value)
-		f.sb.WriteString(";\n")
-	}
-
-	f.emitCommentsBefore(e.RBrace)
-	f.sb.WriteString("}\n")
-}
-
-func (f *formatter) formatStruct(s *ast.StructDecl) {
-	f.emitCommentsBefore(s.Keyword)
-	f.sb.WriteString("struct ")
-	f.sb.WriteString(s.Name.Name)
-	f.sb.WriteString(" {\n")
-
-	// Compute column widths for name and type alignment (regular fields only).
-	maxFieldName := 0
-	maxTypeStr := 0
-	for _, field := range s.Fields {
-		if field.Match != nil {
-			if len(field.Name.Name) > maxFieldName {
-				maxFieldName = len(field.Name.Name)
-			}
-			continue
-		}
-		if len(field.Name.Name) > maxFieldName {
-			maxFieldName = len(field.Name.Name)
-		}
-		ts := typeStr(field.Type)
-		if len(ts) > maxTypeStr {
-			maxTypeStr = len(ts)
-		}
-	}
-
-	for _, field := range s.Fields {
-		f.emitCommentsBefore(field.Name.Span.Start)
-		f.sb.WriteString("    ")
-		f.sb.WriteString(field.Name.Name)
-
-		if field.Match != nil {
-			f.sb.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
-			f.sb.WriteString("  match ")
-			f.sb.WriteString(field.Match.Tag.Name)
-			f.sb.WriteString(" {\n")
-			f.formatCases(field.Match.Cases, "        ")
-			f.sb.WriteString("    };\n")
-			continue
-		}
-
-		f.sb.WriteString(strings.Repeat(" ", maxFieldName-len(field.Name.Name)))
-		f.sb.WriteString("  ")
-		ts := typeStr(field.Type)
-		f.sb.WriteString(ts)
-
-		if len(field.Options) > 0 {
-			f.sb.WriteString(strings.Repeat(" ", maxTypeStr-len(ts)))
-			f.sb.WriteString(" ")
-			f.writeFieldOptions(field.Options)
-		}
-
-		f.sb.WriteString(";\n")
-	}
-
-	for _, opt := range s.Options {
-		f.sb.WriteString("\n")
-		f.formatOptionBlock(opt)
-	}
-
-	f.emitCommentsBefore(s.RBrace)
-	f.sb.WriteString("}\n")
-}
-
-func (f *formatter) formatOptionBlock(ob *ast.OptionBlock) {
-	f.emitCommentsBefore(ob.Keyword)
-	f.sb.WriteString("    option (")
-	f.sb.WriteString(ob.Namespace.Name)
-	f.sb.WriteString(") = {\n")
-
-	for _, kv := range ob.Entries {
-		f.emitCommentsBefore(kv.Key.Span.Start)
-		f.sb.WriteString("        ")
-		f.sb.WriteString(kv.Key.Name)
-		f.sb.WriteString(" = ")
-		f.writeExpr(kv.Value)
-		f.sb.WriteString(";\n")
-	}
-
-	f.sb.WriteString("    };\n")
-}
-
-func (f *formatter) hasBlockOptions(opts []*ast.FieldOption) bool {
-	for _, opt := range opts {
-		if opt.Namespace != nil {
-			return true
-		}
-		if _, ok := opt.Value.(*ast.BlockExpr); ok {
-			return true
-		}
-	}
-	return false
-}
-
-func (f *formatter) writeFieldOptionKey(opt *ast.FieldOption) {
-	if opt.Namespace != nil {
-		f.sb.WriteString("(")
-		f.sb.WriteString(opt.Namespace.Name)
-		f.sb.WriteString(").")
-	}
-	f.sb.WriteString(opt.Key.Name)
-}
-
-func (f *formatter) writeFieldOptions(opts []*ast.FieldOption) {
-	if f.hasBlockOptions(opts) {
-		f.sb.WriteString("[\n")
-		for i, opt := range opts {
-			f.sb.WriteString("        ")
-			f.writeFieldOptionKey(opt)
-			f.sb.WriteString(" = ")
-			f.writeExprIndented(opt.Value, "        ")
-			if i < len(opts)-1 {
-				f.sb.WriteString(",")
-			}
-			f.sb.WriteString("\n")
-		}
-		f.sb.WriteString("    ]")
-	} else {
-		f.sb.WriteString("[")
-		for i, opt := range opts {
-			if i > 0 {
-				f.sb.WriteString(", ")
-			}
-			f.writeFieldOptionKey(opt)
-			f.sb.WriteString(" = ")
-			f.writeExpr(opt.Value)
-		}
-		f.sb.WriteString("]")
-	}
-}
-
-func (f *formatter) writeExpr(expr ast.Expr) { f.writeExprIndented(expr, "") }
-
-func (f *formatter) writeExprIndented(expr ast.Expr, indent string) {
-	switch e := expr.(type) {
-	case *ast.IntegerLit:
-		f.sb.WriteString(e.Raw)
-	case *ast.StringLit:
-		f.sb.WriteString("\"")
-		f.sb.WriteString(e.Value)
-		f.sb.WriteString("\"")
-	case *ast.Ident:
-		f.sb.WriteString(e.Name)
-	case *ast.DottedIdent:
-		for i, part := range e.Parts {
-			if i > 0 {
-				f.sb.WriteString(".")
-			}
-			f.sb.WriteString(part.Name)
-		}
-	case *ast.BoolLit:
-		if e.Value {
-			f.sb.WriteString("true")
-		} else {
-			f.sb.WriteString("false")
-		}
-	case *ast.BlockExpr:
-		f.sb.WriteString("{\n")
-		for _, entry := range e.Entries {
-			f.sb.WriteString(indent)
-			f.sb.WriteString("    ")
-			f.sb.WriteString(entry.Key.Name)
-			f.sb.WriteString(": ")
-			f.writeExprIndented(entry.Value, indent+"    ")
-			f.sb.WriteString("\n")
-		}
-		f.sb.WriteString(indent)
-		f.sb.WriteString("}")
-	}
-}
-
-func (f *formatter) emitCommentsBefore(pos token.Pos) {
-	for f.nextCmt < len(f.comments) && f.comments[f.nextCmt].Span.Start < pos {
-		f.sb.WriteString(f.comments[f.nextCmt].Text)
-		f.sb.WriteString("\n")
-		f.nextCmt++
-	}
-}
-
-func Format(file *ast.File) string {
-	f := &formatter{
-		comments: file.Comments,
-	}
-	return f.format(file)
-}
-
-func caseValueStr(expr ast.Expr) string {
-	switch e := expr.(type) {
+// valueString prints a value on one line. A block value prints as
+// { key: value key: value }.
+func valueString(e ast.Expr) string {
+	switch e := e.(type) {
 	case *ast.IntegerLit:
 		return e.Raw
+	case *ast.StringLit:
+		return `"` + e.Value + `"`
+	case *ast.BoolLit:
+		return strconv.FormatBool(e.Value)
 	case *ast.Ident:
 		return e.Name
-	default:
-		return ""
-	}
-}
-
-func typeStr(te *ast.TypeExpr) string {
-	name := te.Name.Name
-	if te.Dim == nil {
-		return name
-	}
-	var sb strings.Builder
-	sb.WriteString(name)
-	sb.WriteString("[")
-	switch d := te.Dim.(type) {
-	case *ast.IntegerLit:
-		sb.WriteString(d.Raw)
-	case *ast.Ident:
-		sb.WriteString(d.Name)
-	}
-	for _, opt := range te.InlineOptions {
-		sb.WriteString(", ")
-		sb.WriteString(opt.Key.Name)
-		sb.WriteString(" = ")
-		writeExprToBuilder(&sb, opt.Value)
-	}
-	sb.WriteString("]")
-	return sb.String()
-}
-
-func writeExprToBuilder(sb *strings.Builder, expr ast.Expr) {
-	switch e := expr.(type) {
-	case *ast.IntegerLit:
-		sb.WriteString(e.Raw)
-	case *ast.StringLit:
-		sb.WriteString("\"")
-		sb.WriteString(e.Value)
-		sb.WriteString("\"")
-	case *ast.Ident:
-		sb.WriteString(e.Name)
-	case *ast.BoolLit:
-		if e.Value {
-			sb.WriteString("true")
-		} else {
-			sb.WriteString("false")
+	case *ast.DottedIdent:
+		parts := make([]string, len(e.Parts))
+		for i, part := range e.Parts {
+			parts[i] = part.Name
 		}
+		return strings.Join(parts, ".")
 	case *ast.BlockExpr:
-		sb.WriteString("{ ")
-		for i, entry := range e.Entries {
-			if i > 0 {
-				sb.WriteString(" ")
-			}
-			sb.WriteString(entry.Key.Name)
-			sb.WriteString(": ")
-			writeExprToBuilder(sb, entry.Value)
+		if len(e.Entries) == 0 {
+			return "{}"
 		}
-		sb.WriteString(" }")
+		s := "{"
+		for _, entry := range e.Entries {
+			s += " " + entry.Key.Name + ": " + valueString(entry.Value)
+		}
+		return s + " }"
+	default:
+		panic(fmt.Sprintf("format: unexpected expression %T", e))
 	}
+}
+
+// optionKey prints an option's key, with its namespace when it has one, as in
+// (builtin).cel.
+func optionKey(o *ast.FieldOption) string {
+	if o.Namespace == nil {
+		return o.Key.Name
+	}
+	return "(" + o.Namespace.Name + ")." + o.Key.Name
+}
+
+// inline joins comments that share a source line with single spaces and splits
+// the result into lines. The first line can follow other text. The rest
+// continue a block comment and keep their indentation. Every line loses its
+// trailing whitespace.
+func inline(cs []*ast.Comment) []string {
+	texts := make([]string, len(cs))
+	for i, c := range cs {
+		texts[i] = c.Text
+	}
+	lines := strings.Split(strings.Join(texts, " "), "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(l, " \t\r")
+	}
+	return lines
 }

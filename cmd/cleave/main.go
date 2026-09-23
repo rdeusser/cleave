@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"io"
+	"os"
 
 	"github.com/alecthomas/kong"
 
@@ -13,7 +15,7 @@ import (
 type CLI struct {
 	Parse    ParseCmd    `cmd:"" help:"Validate a .clv spec file."`
 	Generate GenerateCmd `cmd:"" help:"Generate parser code from a .clv spec."`
-	Fmt      FmtCmd      `cmd:"" help:"Format a .clv file in place."`
+	Fmt      FmtCmd      `cmd:"" help:"Format .clv files."`
 }
 
 func main() {
@@ -42,11 +44,18 @@ Examples:
   # Generate one Rust source file without Cargo metadata:
   cleave generate --lang rust --no-cargo --out generated format.clv
 
-  # Format a spec file in place:
+  # Print a spec file in canonical form:
   cleave fmt format.clv
 
-  # Check formatting in CI (exits 1 if unformatted):
-  cleave fmt --check format.clv`),
+  # Format the spec files under the current directory in place:
+  cleave fmt -w .
+
+  # List the spec files whose formatting would change:
+  cleave fmt -l .
+
+  # Check formatting in CI (exits 1 if any file would change):
+  cleave fmt --check .`),
+		kong.BindFor[io.Writer](os.Stdout),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact: true,

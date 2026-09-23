@@ -106,7 +106,9 @@ type FieldDecl struct {
 	Name      *Ident
 	Type      *TypeExpr  // set for regular fields
 	Match     *MatchExpr // set for inline match fields
+	LBracket  token.Pos  // opening bracket of the options list, or zero if no list
 	Options   []*FieldOption
+	RBracket  token.Pos // closing bracket of the options list, or zero if no list
 	Semicolon token.Pos
 }
 
@@ -282,3 +284,6 @@ func (l *StringLit) exprNode()            {}
 
 func (l *BoolLit) nodeSpan() token.Span { return l.Span }
 func (l *BoolLit) exprNode()            {}
+
+// SpanOf returns the source extent of n, from its first token through its last.
+func SpanOf(n Node) token.Span { return n.nodeSpan() }

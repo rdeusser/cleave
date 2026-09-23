@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("package test;\n\nstru_t S {\n    /* a */    /* b */\n    x u8;   /* c */   // d\n}\n")

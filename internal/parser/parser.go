@@ -135,6 +135,7 @@ func (p *Parser) parseFormatDecl() *ast.FormatDecl {
 	p.expect(token.LBrace)
 
 	for p.cur.Type != token.RBrace && p.cur.Type != token.EOF {
+		start := p.cur.Span.Start
 		kv := &ast.FormatKV{}
 		kv.Key = p.parseIdent()
 		kv.Assign = p.cur.Span.Start
@@ -143,6 +144,7 @@ func (p *Parser) parseFormatDecl() *ast.FormatDecl {
 		kv.Semicolon = p.cur.Span.Start
 		p.expect(token.Semicolon)
 		f.Entries = append(f.Entries, kv)
+		p.ensureProgress(start)
 	}
 
 	f.RBrace = p.cur.Span.Start
@@ -253,7 +255,7 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 		// If the type already has a dimension (from parseTypeExpr), then [ here must be field options.
 		// If we see [ after a bare type name, peek: IDENT = means field options, else array dim.
 		if p.cur.Type == token.LBracket {
-			f.Options = p.parseFieldOptions()
+			p.parseFieldOptions(f)
 		}
 	}
 
@@ -308,11 +310,12 @@ func (p *Parser) isFieldOptionStart() bool {
 	return t1.Type == token.Ident && t2.Type == token.Assign
 }
 
-func (p *Parser) parseFieldOptions() []*ast.FieldOption {
+func (p *Parser) parseFieldOptions(f *ast.FieldDecl) {
+	f.LBracket = p.cur.Span.Start
 	p.expect(token.LBracket)
-	var opts []*ast.FieldOption
 
 	for p.cur.Type != token.RBracket && p.cur.Type != token.EOF {
+		start := p.cur.Span.Start
 		opt := &ast.FieldOption{}
 
 		if p.cur.Type == token.LParen {
@@ -329,15 +332,16 @@ func (p *Parser) parseFieldOptions() []*ast.FieldOption {
 		opt.Assign = p.cur.Span.Start
 		p.expect(token.Assign)
 		opt.Value = p.parseValue()
-		opts = append(opts, opt)
+		f.Options = append(f.Options, opt)
 
 		if p.cur.Type == token.Comma {
 			p.next()
 		}
+		p.ensureProgress(start)
 	}
 
+	f.RBracket = p.cur.Span.Start
 	p.expect(token.RBracket)
-	return opts
 }
 
 func (p *Parser) parseOptionBlock() *ast.OptionBlock {
@@ -354,6 +358,7 @@ func (p *Parser) parseOptionBlock() *ast.OptionBlock {
 	p.expect(token.LBrace)
 
 	for p.cur.Type != token.RBrace && p.cur.Type != token.EOF {
+		start := p.cur.Span.Start
 		kv := &ast.OptionKV{}
 		kv.Key = p.parseIdent()
 		kv.Assign = p.cur.Span.Start
@@ -362,6 +367,7 @@ func (p *Parser) parseOptionBlock() *ast.OptionBlock {
 		kv.Semicolon = p.cur.Span.Start
 		p.expect(token.Semicolon)
 		ob.Entries = append(ob.Entries, kv)
+		p.ensureProgress(start)
 	}
 
 	ob.RBrace = p.cur.Span.Start
@@ -428,12 +434,14 @@ func (p *Parser) parseBlockExpr() *ast.BlockExpr {
 	p.expect(token.LBrace)
 
 	for p.cur.Type != token.RBrace && p.cur.Type != token.EOF {
+		start := p.cur.Span.Start
 		entry := &ast.BlockEntry{}
 		entry.Key = p.parseIdent()
 		entry.Colon = p.cur.Span.Start
 		p.expect(token.Colon)
 		entry.Value = p.parseValue()
 		block.Entries = append(block.Entries, entry)
+		p.ensureProgress(start)
 	}
 
 	block.RBrace = p.cur.Span.Start
@@ -536,18 +544,31 @@ func (p *Parser) errorf(format string, args ...any) {
 	p.errors = append(p.errors, Error{Pos: pos, Message: fmt.Sprintf(format, args...)})
 }
 
+// synchronize recovers from a syntax error at the current token. It skips that
+// token and the tokens after it, through the next semicolon or up to the next
+// closing brace, import, or declaration keyword. It always skips at least one
+// token, so the loop that reported the error makes progress.
 func (p *Parser) synchronize() {
 	for p.cur.Type != token.EOF {
 		if p.cur.Type == token.Semicolon {
 			p.next()
 			return
 		}
+		p.next()
 		if p.cur.Type == token.RBrace {
 			return
 		}
 		if p.cur.Type == token.Struct || p.cur.Type == token.Enum || p.cur.Type == token.Format || p.cur.Type == token.Union || p.cur.Type == token.Import {
 			return
 		}
+	}
+}
+
+// ensureProgress skips the current token if the list entry that began at start
+// consumed no tokens. A list loop calls it after each entry so that the loop
+// always advances. The failed entry has already reported an error at that token.
+func (p *Parser) ensureProgress(start token.Pos) {
+	if p.cur.Span.Start == start {
 		p.next()
 	}
 }

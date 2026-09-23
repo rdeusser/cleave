@@ -54,12 +54,20 @@ cleave generate --lang rust --out gen/ format.clv
 # Generate one Rust source file without Cargo metadata:
 cleave generate --lang rust --no-cargo --out gen/ format.clv
 
-# Format a spec file in place:
+# Print a spec file in canonical form:
 cleave fmt format.clv
 
-# Check formatting in CI (exits 1 if not formatted):
-cleave fmt --check format.clv
+# Format the spec files under the current directory in place:
+cleave fmt -w .
+
+# List the spec files whose formatting would change:
+cleave fmt -l .
+
+# Check formatting in CI (exits 1 if any file would change):
+cleave fmt --check .
 ```
+
+`cleave fmt` searches each directory argument recursively for `.clv` files. The search skips hidden files, hidden directories such as `.git`, `node_modules` directories, and `testdata` directories, whose test fixtures may be unformatted on purpose. A file named as an argument is formatted whatever its name. A directory named as an argument is searched whatever its name, so `cleave fmt -w testdata` formats the fixtures in `testdata`.
 
 ## Language
 
